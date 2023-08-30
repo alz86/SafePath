@@ -1,0 +1,3 @@
+[submodule "src/itinero"]
+	path = src/itinero
+	url = https://github.com/alz86/itinero_routing_safepath/
