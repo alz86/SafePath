@@ -1,4 +1,7 @@
 ﻿using AutoMapper;
+using Itinero.SafePath;
+using SafePath.DTOs;
+using Area = SafePath.Entities.Area;
 
 namespace SafePath;
 
@@ -6,8 +9,7 @@ public class SafePathApplicationAutoMapperProfile : Profile
 {
     public SafePathApplicationAutoMapperProfile()
     {
-        /* You can configure your AutoMapper mapping configuration here.
-         * Alternatively, you can split your mapping configurations
-         * into multiple profile classes for a better organization. */
+        CreateMap<Area, AreaDto>();
+        CreateMap<MapSecurityElement, MapSecurityElementDto>();
     }
 }

@@ -1,19 +1,20 @@
-﻿using SafePath;
+﻿using SafePath.Services;
 using Volo.Abp;
 
 Console.WriteLine("Initializing App");
 
-// 1: Create the ABP application container
+// ABP application container
 using var application = await AbpApplicationFactory.CreateAsync<OSMParserModule>();
 
-
-// 2: Initialize/start the ABP Framework (and all the modules)
+// ABP Framework init 
 await application.InitializeAsync();
 
 Console.WriteLine("App Initialized");
 
-var path = args.Length > 0 ? args[0] : null;
+//app workload
+var path = args.FirstOrDefault();
 
+path = "C:\\Code\\SafePath\\abp\\SafePath\\src\\server\\src\\SafeMap.OSMParser\\berlin-latest.osm.pbf";
 if (string.IsNullOrWhiteSpace(path))
 {
     Console.WriteLine("Please, enter the full path to the .osm.pbf file");
@@ -26,8 +27,8 @@ if (string.IsNullOrWhiteSpace(path))
     }
 }
 
-var parser = new OSMFileParser(path);
-await parser.Parse();
+//var parser = application.ServiceProvider.GetService<IOSMDataParsingService>();
+await new OSMDataParsingService()!.Parse(path);
 
-// 3: Stop the ABP Framework (and all the modules)
+// ABP tier down
 await application.ShutdownAsync();

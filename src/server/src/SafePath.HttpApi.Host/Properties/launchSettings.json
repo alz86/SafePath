@@ -3,16 +3,14 @@
     "windowsAuthentication": false,
     "anonymousAuthentication": true,
     "iisExpress": {
-      "applicationUrl": "http://192.168.123.36:44385",
-      "sslPort": 44386
+      "applicationUrl": "https://localhost:44385",
+      "sslPort": 44385
     }
   },
   "profiles": {
     "IIS Express": {
       "commandName": "IISExpress",
       "launchBrowser": true,
-      "applicationUrl": "http://192.168.123.36:44385",
-      "useSSL": false,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
@@ -20,7 +18,7 @@
     "SafePath.HttpApi.Host": {
       "commandName": "Project",
       "launchBrowser": true,
-      "applicationUrl": "http://192.168.123.36:44385",
+      "applicationUrl": "https://localhost:44385",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }

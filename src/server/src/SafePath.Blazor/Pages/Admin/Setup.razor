@@ -1,0 +1,16 @@
+﻿@page "/admin/setup"
+@using SafePath.Services;
+@inject ITestDataService testDataService
+
+<h3>Setup</h3>
+<p>@message</p>
+
+@code {
+    private string message;
+    protected override async Task OnInitializedAsync()
+    {
+        message = "Adding test data";
+        await testDataService.AddTestData();
+        message = "Test data added";
+    }
+}

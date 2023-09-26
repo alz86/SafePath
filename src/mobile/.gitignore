@@ -37,3 +37,4 @@ yarn-error.*
 # custom
 .env
 android/app/src/main/AndroidManifest.xml
+android/app/debug.keystore

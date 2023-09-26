@@ -23,11 +23,12 @@ using Volo.Abp.AspNetCore.Mvc.UI.Bundling;
 using Volo.Abp.AspNetCore.Mvc.UI.Theme.Shared;
 using Volo.Abp.AspNetCore.Serilog;
 using Volo.Abp.Autofac;
-using Volo.Abp.Localization;
 using Volo.Abp.Modularity;
 using Volo.Abp.Swashbuckle;
 using Volo.Abp.UI.Navigation.Urls;
 using Volo.Abp.VirtualFileSystem;
+using System.Threading.Tasks;
+using SafePath.Services;
 
 namespace SafePath;
 
@@ -164,10 +165,12 @@ public class SafePathHttpApiHostModule : AbpModule
             options.AddDefaultPolicy(builder =>
             {
                 builder
-                    .WithOrigins(configuration["App:CorsOrigins"]?
+                    .WithOrigins((configuration["App:CorsOrigins"]?
                         .Split(",", StringSplitOptions.RemoveEmptyEntries)
                         .Select(o => o.RemovePostFix("/"))
                         .ToArray() ?? Array.Empty<string>())
+                        .Union(new[] { "*", "https://localhost:44359" }).ToArray()
+                        )
                     .WithAbpExposedHeaders()
                     .SetIsOriginAllowedToAllowWildcardSubdomains()
                     .AllowAnyHeader()
@@ -222,5 +225,19 @@ public class SafePathHttpApiHostModule : AbpModule
         app.UseAuditing();
         app.UseAbpSerilogEnrichers();
         app.UseConfiguredEndpoints();
+    }
+
+    public override async Task OnPostApplicationInitializationAsync(ApplicationInitializationContext context)
+    {
+        await base.OnPostApplicationInitializationAsync(context);
+
+        var itineroProxy = context.ServiceProvider.GetService<IItineroProxy>()!;
+        if (!itineroProxy.Initied)
+        {
+            //TODO: currently, for dev purposes, we only support Berlin
+            var basePathResolver = context.ServiceProvider.GetService<IBasePathResolver>()!;
+            var osmDataPath = Path.Combine(basePathResolver.BasePath, "Resources", "berlin-latest.osm.pbf");
+            await itineroProxy.Init(osmDataPath);
+        }
     }
 }

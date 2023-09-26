@@ -23,10 +23,10 @@ namespace SafePath.Blazor;
 [DependsOn(
     typeof(AbpAutofacWebAssemblyModule),
     typeof(SafePathHttpApiClientModule),
-    typeof(AbpAspNetCoreComponentsWebAssemblyLeptonXLiteThemeModule),
-    typeof(AbpIdentityBlazorWebAssemblyModule),
-    typeof(AbpTenantManagementBlazorWebAssemblyModule),
-    typeof(AbpSettingManagementBlazorWebAssemblyModule)
+    typeof(AbpAspNetCoreComponentsWebAssemblyLeptonXLiteThemeModule)
+    //typeof(AbpIdentityBlazorWebAssemblyModule)
+    //typeof(AbpTenantManagementBlazorWebAssemblyModule),
+    //typeof(AbpSettingManagementBlazorWebAssemblyModule)
 )]
 public class SafePathBlazorModule : AbpModule
 {

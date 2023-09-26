@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using SafePath.Entities;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;
 using Volo.Abp.Data;
@@ -24,6 +25,7 @@ public class SafePathDbContext :
     ITenantManagementDbContext
 {
     /* Add DbSet properties for your Aggregate Roots / Entities here. */
+    public DbSet<Area> Areas { get; set; }
 
     #region Entities from the modules
 
@@ -53,6 +55,7 @@ public class SafePathDbContext :
 
     #endregion
 
+
     public SafePathDbContext(DbContextOptions<SafePathDbContext> options)
         : base(options)
     {
@@ -75,6 +78,7 @@ public class SafePathDbContext :
         builder.ConfigureTenantManagement();
 
         /* Configure your own tables/entities inside here */
+        builder.Entity<Area>(b => b.ToTable("Area", SafePathConsts.DbSchema)); ;
 
         //builder.Entity<YourEntity>(b =>
         //{

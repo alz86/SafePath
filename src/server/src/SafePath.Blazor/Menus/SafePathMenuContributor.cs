@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SafePath.Localization;
@@ -43,12 +44,23 @@ public class SafePathMenuContributor : IMenuContributor
             0,
             new ApplicationMenuItem(
                 SafePathMenus.Home,
-                l["Menu:Home"],
+                "Dashboard",//l["Menu:Home"],
                 "/",
                 icon: "fas fa-home"
             )
         );
-     
+
+        context.Menu.Items.Insert(
+            0,
+            new ApplicationMenuItem(
+                SafePathMenus.AreasManagement,
+                "Manage Areas",//l["Menu:Home"],
+                "/Areas",
+                icon: "fas fa-map",
+                requiredPermissionName: "AbpTenantManagement.Tenants"
+            )
+        );
+        /*
         var administration = context.Menu.GetAdministration();
 
         if (MultiTenancyConsts.IsEnabled)
@@ -62,7 +74,7 @@ public class SafePathMenuContributor : IMenuContributor
 
         administration.SetSubItemOrder(IdentityMenuNames.GroupName, 2);
         administration.SetSubItemOrder(SettingManagementMenus.GroupName, 3);
-
+        */
         return Task.CompletedTask;
     }
 

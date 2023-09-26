@@ -1,4 +1,6 @@
-﻿using Volo.Abp.Application.Services;
+﻿using System.Threading.Tasks;
+using Volo.Abp.Application.Services;
+using static SafePath.ItineroProxy;
 
 namespace SafePath
 {
@@ -15,10 +17,11 @@ namespace SafePath
         /// <returns>String with route path in Geocode Json</returns>
         /// <remarks>
         /// These are the coordinates suggested for testing:
+        /// Profile: Pedestrian (1)
         ///  Source: 52.51140710937834, 13.415687404804045
         ///  Target: 52.505712002376185, 13.424840946638504
         /// </remarks>
-        string CalculateRoute(float sourceLatitude, float sourceLongitude, float destLatitude, float destLongitude);
+        Task<string> CalculateRoute(SupportedProfile profile, float sourceLatitude, float sourceLongitude, float destLatitude, float destLongitude);
     }
 
     /// <summary>
@@ -26,9 +29,15 @@ namespace SafePath
     /// </summary>
     public class RouteGenereationService : ApplicationService, IRouteGenereationService
     {
-        public IItineroProxy ItineroProxy { get; set; }
+        private readonly IItineroProxy itineroProxy;
+        public RouteGenereationService(IItineroProxy itineroProxy)
+        {
+            this.itineroProxy = itineroProxy;
+        }
 
-        public string CalculateRoute(float sourceLatitude, float sourceLongitude, float destLatitude, float destLongitude) =>
-            ItineroProxy.CalculateRoute(sourceLatitude, sourceLongitude, destLatitude, destLongitude);
+        public Task<string> CalculateRoute(SupportedProfile profile, float sourceLatitude, float sourceLongitude, float destLatitude, float destLongitude) =>
+            Task.FromResult(itineroProxy.CalculateRoute(profile, sourceLatitude, sourceLongitude, destLatitude, destLongitude));
     }
+
+
 }
