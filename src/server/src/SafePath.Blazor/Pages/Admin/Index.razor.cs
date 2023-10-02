@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Configuration;
 using Microsoft.JSInterop;
 using SafePath.DTOs;
 using SafePath.Services;
@@ -18,6 +19,11 @@ public partial class Index
     protected AreaDto? SelectedArea { get; set; }
 
     protected GeoJsonFeatureCollection SecurityElements { get; set; }
+
+    protected IConfiguration Configuration { get; set; }
+
+
+    protected string? TileServer { get => Configuration?["Settings.TileServer"]; }
 
 
     protected override async Task OnInitializedAsync()

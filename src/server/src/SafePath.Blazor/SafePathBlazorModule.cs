@@ -24,9 +24,9 @@ namespace SafePath.Blazor;
     typeof(AbpAutofacWebAssemblyModule),
     typeof(SafePathHttpApiClientModule),
     typeof(AbpAspNetCoreComponentsWebAssemblyLeptonXLiteThemeModule)
-    //typeof(AbpIdentityBlazorWebAssemblyModule)
-    //typeof(AbpTenantManagementBlazorWebAssemblyModule),
-    //typeof(AbpSettingManagementBlazorWebAssemblyModule)
+//typeof(AbpIdentityBlazorWebAssemblyModule)
+//typeof(AbpTenantManagementBlazorWebAssemblyModule),
+//typeof(AbpSettingManagementBlazorWebAssemblyModule)
 )]
 public class SafePathBlazorModule : AbpModule
 {
@@ -34,6 +34,13 @@ public class SafePathBlazorModule : AbpModule
     {
         var environment = context.Services.GetSingletonInstance<IWebAssemblyHostEnvironment>();
         var builder = context.Services.GetSingletonInstance<WebAssemblyHostBuilder>();
+
+        // Configu package setup
+        /*
+        builder.Configuration
+            .AddJsonFile("wwwroot/appsettings.json")
+            .AddJsonFile($"wwwroot/appsettings.{builder.HostEnvironment.Environment}.json", optional: true);
+        */
 
         ConfigureAuthentication(builder);
         ConfigureHttpClient(context, environment);

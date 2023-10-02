@@ -29,27 +29,29 @@
 
     /* Pressed button state */
     .pressed {
-        background-color: #0056b3; /* a darker blue */
+        background-color: #5632a4; /* a darker blue */
     }
 
     .btn-list .fas {
-        width: 18px; 
+        width: 18px;
         display: inline-block;
-        
     }
 
     .btn-list button {
         text-align: left;
         padding: 9px;
-        width: 140px;
+        width: 190px;
     }
-    
-    </style>
+
+    .container.buttons .btn {
+        padding: 15px;
+    }
+</style>
 
 
 <!-- Title -->
-<div class="container text-center mt-4">
-    <h1>Dashboard</h1>
+<div class="container text-center">
+    <h1>Berlin's Dashboard</h1>
 </div>
 
 @if (Areas?.Any() == true)
@@ -66,49 +68,57 @@
 }
 
 <!-- Map -->
-<div class="container text-center my-5" style="display: flex;">
+<div class="container text-center" style="display: flex;">
 
     <div id="loadingOverlay" class="loading-overlay">
         <span>Loading security elements from the server...</span>
     </div>
 
     <!-- Map -->
-    <div id="map" style="flex: 6; height: 500px;"></div>
+    <div id="map" style="flex: 6; height: 550px;"></div>
 
     <!-- Vertical Button Bar -->
     <div class="btn-list" style="flex: 1; padding-left: 15px; display: flex; flex-direction: column;">
         <button @onclick='() => ToggleLayer("StreetLamp")' id="btn-StreetLamp" class="btn btn-secondary mb-2">
-            <i class="fas fa-lightbulb"></i> Street Lamp
+            <i class="fas fa-lightbulb"></i>&nbsp;|&nbsp;&nbsp;Street Lamp
         </button>
         <button @onclick='() => ToggleLayer("CCTV")' id="btn-CCTV" class="btn btn-secondary mb-2">
-            <i class="fas fa-video"></i> CCTV
+            <i class="fas fa-video"></i>&nbsp;|&nbsp;&nbsp;CCTV
         </button>
         <button @onclick='() => ToggleLayer("BusStation")' id="btn-BusStation" class="btn btn-secondary mb-2">
-            <i class="fas fa-bus"></i> Bus Station
+            <i class="fas fa-bus"></i>&nbsp;|&nbsp;&nbsp;Bus Station
         </button>
         <button @onclick='() => ToggleLayer("RailwayStation")' id="btn-RailwayStation" class="btn btn-secondary mb-2">
-            <i class="fas fa-train"></i> Railway
+            <i class="fas fa-train"></i>&nbsp;|&nbsp;&nbsp;Railway
         </button>
         <button @onclick='() => ToggleLayer("PoliceStation")' id="btn-PoliceStation" class="btn btn-secondary mb-2">
-            <i class="fas fa-shield-alt"></i> Police Station
+            <i class="fas fa-shield-alt"></i>&nbsp;|&nbsp;&nbsp;Police Station
         </button>
         <button @onclick='() => ToggleLayer("Hospital")' id="btn-Hospital" class="btn btn-secondary mb-2">
-            <i class="fas fa-hospital"></i> Hospital
+            <i class="fas fa-hospital"></i>&nbsp;|&nbsp;&nbsp;Hospital
         </button>
         <button @onclick='() => ToggleLayer("Semaphore")' id="btn-Semaphore" class="btn btn-secondary mb-2">
-            <i class="fas fa-traffic-light"></i> Semaphore
+            <i class="fas fa-traffic-light"></i>&nbsp;|&nbsp;&nbsp;Semaphore
+        </button>
+        <hr />
+        <button @onclick="UpdateMapData" class="btn btn-secondary  mb-2">
+            <i class="fas fa-database"></i>&nbsp;|&nbsp;&nbsp;Bulk Data Update
+        </button>
+        <button @onclick="UpdateCrimeRate" class="btn btn-danger">
+            <i class="fas fa-exclamation-triangle"></i>&nbsp;|&nbsp;
+            Update Crime Data
         </button>
     </div>
 </div>
 
 <!-- Buttons -->
-<div class="container text-center my-4">
-    <button @onclick="UpdateMapData" class="btn btn-primary mr-2">Update Map Data</button>
-    <button @onclick="UpdateCrimeRate" class="btn btn-danger">Update Crime Rate</button>
+<div class="container buttons text-center my-3">
+    <div style="width: 300px"></div>
+
 </div>
 
 <script defer>
-    
+
     window.showLoadingOverlay = function () {
         document.getElementById('loadingOverlay').style.display = 'block';
     };
@@ -142,8 +152,8 @@
     };
 
     window.showElements = function (layerType, elements) {
-        
-        if (!securityElements && !!elements) 
+
+        if (!securityElements && !!elements)
             securityElements = elements;
 
         if (map.getLayer(layerType + "-layer")) {
@@ -152,7 +162,7 @@
             var newVisibility = (visibility === 'none') ? 'visible' : 'none';
             map.setLayoutProperty(layerType + "-layer", 'visibility', newVisibility);
         } else {
-            
+
             // Filter the security elements by the selected type
             var filteredData = {
                 type: 'FeatureCollection',
@@ -160,7 +170,7 @@
                     return feature.properties.type === layerType;
                 })
             };
-            
+
             // Create a new source for our data
             map.addSource(layerType + "-source", {
                 'type': 'geojson',
@@ -198,7 +208,7 @@
             center: [initLong, initLat], // starting position. Test: [13.4050, 52.5200] // Berlin
             zoom: 12 // starting zoom
         });
-        
+
         map.on('load', function () {
 
             //we remove extra layers that comes by defaul but
@@ -222,9 +232,9 @@
         });
 
     };
-    
+
     function loadImage(baseFolder, name) {
-            
+
         return new Promise((resolve, reject) => {
             const img = new Image();
             img.onload = () => {
@@ -250,7 +260,7 @@
 
     function waitForMapLibre(initLat, initLong) {
         intervalId = setInterval(function () {
-            
+
             elapsedTime += 300; // Interval time
             if (elapsedTime >= timeout) {
                 console.error("Timed out waiting for MapLibre to load.");
@@ -267,7 +277,7 @@
     }
 
     function filterLayers() {
-        
+
         var allowedLayers = [
             "Background",
             "Glacier",

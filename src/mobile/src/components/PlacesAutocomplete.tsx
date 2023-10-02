@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { GOOGLE_CLOUD_KEY } from '@env';
+import { PlaceDetails } from '../types';
 
 // (navigator as any).geolocation = require('@react-native-community/geolocation');
 
@@ -12,7 +13,6 @@ const PlacesAutocomplete = ({
   onPlaceSelected: (detail: PlaceDetails) => void;
 }) => {
   const startLocationRef = useRef(null);
-
   return (
     <GooglePlacesAutocomplete
       ref={startLocationRef}
@@ -37,11 +37,3 @@ const PlacesAutocomplete = ({
 };
 
 export default PlacesAutocomplete;
-
-export class PlaceDetails {
-  public name!: string;
-
-  public latitude!: number;
-
-  public longitude!: number;
-}
