@@ -7,23 +7,19 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SafePath.Blazor.Menus;
 using OpenIddict.Abstractions;
-using Volo.Abp.AspNetCore.Components.WebAssembly.LeptonXLiteTheme;
-using Volo.Abp.AspNetCore.Components.Web.LeptonXLiteTheme.Themes.LeptonXLite;
 using Volo.Abp.AspNetCore.Components.Web.Theming.Routing;
 using Volo.Abp.Autofac.WebAssembly;
 using Volo.Abp.AutoMapper;
 using Volo.Abp.Modularity;
 using Volo.Abp.UI.Navigation;
-using Volo.Abp.Identity.Blazor.WebAssembly;
-using Volo.Abp.SettingManagement.Blazor.WebAssembly;
-using Volo.Abp.TenantManagement.Blazor.WebAssembly;
+using Volo.Abp.AspNetCore.Components.WebAssembly.BasicTheme;
 
 namespace SafePath.Blazor;
 
 [DependsOn(
     typeof(AbpAutofacWebAssemblyModule),
     typeof(SafePathHttpApiClientModule),
-    typeof(AbpAspNetCoreComponentsWebAssemblyLeptonXLiteThemeModule)
+    typeof(AbpAspNetCoreComponentsWebAssemblyBasicThemeModule)
 //typeof(AbpIdentityBlazorWebAssemblyModule)
 //typeof(AbpTenantManagementBlazorWebAssemblyModule),
 //typeof(AbpSettingManagementBlazorWebAssemblyModule)
