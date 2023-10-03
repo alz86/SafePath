@@ -1,3 +1,4 @@
+/* eslint-disable max-classes-per-file */
 export class PlaceDetails {
   public name!: string;
 
@@ -7,3 +8,11 @@ export class PlaceDetails {
 }
 
 export type TripType = 'walk' | 'bike' | 'bus';
+
+export class SearchParams {
+  public start!: PlaceDetails;
+
+  public end!: PlaceDetails;
+
+  public safetyLevel!: number;
+}

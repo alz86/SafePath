@@ -1,29 +1,26 @@
 /* eslint-disable react/style-prop-object */
-import { View, Button } from 'react-native';
+import { Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import PlacesAutocomplete from '../components/PlacesAutocomplete';
 import MapLibreMap from '../components/MapLibreMap';
 import { buildQueryString, post } from '../api/api';
-import { PlaceDetails } from '../types';
+import { PlaceDetails, SearchParams } from '../types';
 import BottomSheetComponent from '../components/BottomSheetComponent';
+import centerMapIcon from '../../assets/centerMap.png';
 
 // TODO: load init data from the  server
 const mapStartingPoint = [13.405, 52.52]; // Berlin
 
 const Home = () => {
-  const [startPlace, setStartPlace] = useState<PlaceDetails | undefined>(undefined);
-  const [endPlace, setEndPlace] = useState<PlaceDetails | undefined>(undefined);
   const [route, setRoute] = useState<any>(null);
 
-  const handleButtonPress = async () => {
-    if (!startPlace || !endPlace) return;
-
+  const handleButtonPress = async (searchParams: SearchParams) => {
     const params = {
-      sourceLatitude: startPlace.latitude,
-      sourceLongitude: startPlace.longitude,
-      destLatitude: endPlace.latitude,
-      destLongitude: endPlace.longitude,
+      sourceLatitude: searchParams.start.latitude,
+      sourceLongitude: searchParams.start.longitude,
+      destLatitude: searchParams.end.latitude,
+      destLongitude: searchParams.end.longitude,
+      safetyLevel: searchParams.safetyLevel,
     };
 
     // test data
@@ -45,10 +42,31 @@ const Home = () => {
   return (
     <>
       <MapLibreMap shape={route} startPoint={mapStartingPoint} userPosition={mapStartingPoint} />
-      <BottomSheetComponent />
+      <TouchableOpacity style={styles.floatingButton}>
+        <Image source={centerMapIcon} style={styles.imageStyle} />
+      </TouchableOpacity>
+      <BottomSheetComponent onSearch={handleButtonPress} />
       <StatusBar style="auto" />
     </>
   );
 };
+
+const styles = StyleSheet.create({
+  floatingButton: {
+    position: 'absolute',
+    bottom: '20%',
+    right: '5%',
+    backgroundColor: 'white',
+    padding: 10,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageStyle: {
+    width: 30,
+    height: 30,
+    resizeMode: 'contain',
+  },
+});
 
 export default Home;

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Button } f
 import BottomSheet from '@gorhom/bottom-sheet';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { PlaceDetails } from '../types';
+import { PlaceDetails, SearchParams } from '../types';
 import { LocationType, RootStackParamList } from '../navigation/types';
 import startingPositionIcon from '../../assets/startingPositionIcon.png';
 import destinationIcon from '../../assets/destinationIcon.png';
@@ -12,7 +12,7 @@ import SpeedSlider from './SpeedSlider';
 
 const screenWidth = Dimensions.get('window').width;
 
-const BottomSheetComponent = () => {
+const BottomSheetComponent = ({ onSearch }: { onSearch: (params: SearchParams) => void }) => {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const [startLocation, setStartLocation] = useState<PlaceDetails | undefined>();
   const [destinationLocation, setDestinationLocation] = useState<PlaceDetails | undefined>();
@@ -28,8 +28,17 @@ const BottomSheetComponent = () => {
 
   const [sliderValue, setSliderValue] = useState<number>(1);
 
+  const handleSearchPressed = () => {
+    const searchParams: SearchParams = {
+      start: startLocation!,
+      end: destinationLocation!,
+      safetyLevel: sliderValue!,
+    };
+    onSearch(searchParams);
+  };
+
   return (
-    <BottomSheet index={0} snapPoints={['15%', '60%']}>
+    <BottomSheet index={0} snapPoints={['15%', '55%']}>
       <View style={styles.container}>
         <TouchableOpacity
           onPress={() => handleSelectLocation('start')}
@@ -60,7 +69,7 @@ const BottomSheetComponent = () => {
         </View>
 
         <View style={styles.buttonContainer}>
-          <Button title="Search" color="#7127E8" />
+          <Button title="Search" color="#7127E8" onPress={handleSearchPressed} />
         </View>
       </View>
     </BottomSheet>
