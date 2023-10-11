@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <Import Project="..\..\common.props" />
 
@@ -7,6 +7,14 @@
     <Nullable>enable</Nullable>
     <RootNamespace>SafePath</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Resources\mappings.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Mappings.json" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\itinero\src\Itinero.IO.Osm\Itinero.IO.Osm.csproj" />
@@ -22,5 +30,6 @@
     <PackageReference Include="Volo.Abp.FeatureManagement.Application" Version="7.3.2" />
     <PackageReference Include="Volo.Abp.SettingManagement.Application" Version="7.3.2" />
   </ItemGroup>
+
 
 </Project>

@@ -1,0 +1,142 @@
+[
+  {
+    "element": "StreetLamp",
+    "values": [
+      {
+        "key": "highway",
+        "values": [ "street_lamp" ]
+      }
+    ]
+  },
+  {
+    "element": "CCTV",
+    "values": [
+      {
+        "key": "man_made",
+        "values": [ "surveillance" ]
+      },
+      {
+        "key": "surveillance",
+        "values": [ "guard", "public" ]
+      }
+    ]
+  },
+  {
+    "element": "BusStation",
+    "values": [
+      {
+        "key": "amenity",
+        "values": [ "bus_station" ]
+      },
+      {
+        "key": "public_transport",
+        "values": [ "station" ]
+      }
+    ]
+  },
+  {
+    "element": "RailwayStation",
+    "values": [
+      {
+        "key": "railway",
+        "values": [ "station" ]
+      }
+    ]
+  },
+  {
+    "element": "PoliceStation",
+    "values": [
+      {
+        "key": "amenity",
+        "values": [ "police" ]
+      }
+    ]
+  },
+  {
+    "element": "GovernmentBuilding",
+    "values": [
+      {
+        "key": "government",
+        "values": [
+          "administrative",
+          "ministry",
+          "customs",
+          "register_office",
+          "transportation",
+          "healthcare",
+          "education",
+          "parliament",
+          "intelligence"
+        ]
+      },
+      {
+        "key": "social_facility",
+        "values": [ "ambulatory_care", "community_centre", "healthcare", "social_club" ]
+      },
+      {
+        "key": "community_centre",
+        "values": [ "social_centre", "club_home", "cultural_centre", "community_hall" ]
+      },
+      {
+        "key": "embassy",
+        "values": [ "delegation", "residence", "branch_embassy" ]
+      },
+      {
+        "key": "diplomatic",
+        "values": [ "embassy", "liaison", "consulate", "mission", "ambassadors_residence" ]
+      },
+      {
+        "key": "amenity",
+        "values": [ "community_centre", "social_facility", "townhall", "courthouse" ]
+      }
+    ]
+  },
+  {
+    "element": "EducationCenter",
+    "values": [
+      {
+        "key": "school",
+        "values": [ "secondary", "primary" ]
+      },
+      {
+        "key": "tourism",
+        "values": [ "museum" ]
+      },
+      {
+        "key": "amenity",
+        "values": [ "kindergarten", "school", "university", "college", "prep_school" ]
+      }
+    ]
+  },
+  {
+    "element": "HealthCenter",
+    "values": [
+      {
+        "key": "healthcare",
+        "values": [ "centre", "clinic", "hospital" ]
+      },
+      {
+        "key": "amenity",
+        "values": [ "clinic", "hospital", "health_centre" ]
+      }
+    ]
+  },
+  {
+    "element": "Leisure",
+    "values": [
+      {
+        "key": "leisure",
+        "values": [ "stadium", "arena" ]
+      }
+    ]
+  },
+  {
+    "element": "Amenity",
+    "values": [
+      {
+        "key": "amenity",
+        "values": [ "fuel", "fire_station", "cinema", "auditorium" ]
+      }
+    ]
+  }
+]

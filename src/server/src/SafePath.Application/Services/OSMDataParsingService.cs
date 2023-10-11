@@ -15,6 +15,10 @@ using System.Linq;
 using SafetyInfo = Itinero.SafePath.SafetyInfo;
 using Volo.Abp.Application.Services;
 using SafePath.DTOs;
+using SafePath.Classes;
+using System.Reflection;
+using System.Diagnostics;
+using System.Text.Json.Serialization;
 
 namespace SafePath.Services
 {
@@ -25,11 +29,27 @@ namespace SafePath.Services
 
     public class OSMDataParsingService : ApplicationService, IOSMDataParsingService
     {
+        private static IList<SecurityElementMapping>? mappings;
+        protected static IList<SecurityElementMapping> Mappings
+        {
+            get
+            {
+                if (mappings == null)
+                {
+                    const string MappingsFileName = "Mappings.json";
+                    const string MappingsFilePath = $@"SafePath.Resources.{MappingsFileName}";
+
+                    mappings = ReadFromResources<IList<SecurityElementMapping>>(MappingsFilePath);
+                }
+                return mappings;
+            }
+        }
+
         public async Task Parse(string filePath)
         {
             //TODO: this is method is not running truly concurrently, despite
             //running tasks at the same time. This code has to be refactored
-            //to using Task.Run instead of multiple tasks ran with Task.WhenAll.
+            //to using Task.Run instead of multiple tasks run with Task.WhenAll.
 
             if (!File.Exists(filePath))
                 throw new Exception($"File not found at path: {filePath}");
@@ -100,19 +120,31 @@ namespace SafePath.Services
             double rate = 0;
             switch (type)
             {
+                case SecurityElementTypes.PoliceStation:
+                    rate = 2;
+                    break;
                 case SecurityElementTypes.BusStation:
                 case SecurityElementTypes.Hospital:
                 case SecurityElementTypes.RailwayStation:
                     rate = 1.5;
                     break;
-                case SecurityElementTypes.PoliceStation:
-                    rate = 2;
+                case SecurityElementTypes.GovernmentBuilding:
+                    rate = 1.4;
+                    break;
+                case SecurityElementTypes.CCTV:
+                    rate = 1.25;
+                    break;
+                case SecurityElementTypes.Leisure:
+                case SecurityElementTypes.Amenity:
+                case SecurityElementTypes.EducationCenter:
+                case SecurityElementTypes.HealthCenter:
+                    rate = 1.2;
                     break;
                 case SecurityElementTypes.StreetLamp:
                     rate = 1.1;
                     break;
-                case SecurityElementTypes.CCTV:
-                    rate = 1.25;
+                case SecurityElementTypes.Semaphore:
+                    rate = 1.05;
                     break;
                 case SecurityElementTypes.Test_5_Points:
                     rate = 5;
@@ -164,26 +196,6 @@ namespace SafePath.Services
             using var stream = File.OpenWrite(outputFilePath);
             await JsonSerializer.SerializeAsync(stream, data);
         }
-
-        public class SecurityElement
-        {
-            public double Lat { get; set; }
-            public double Long { get; set; }
-            public Types Type { get; set; }
-            public int? Radiance { get; set; }
-            public double SecurityRate { get; set; }
-
-            public enum Types
-            {
-                PublicLightning = 1,
-                Semaphore = 2,
-                ComercialArea,
-                PoliceStation,
-                Hospital
-            }
-        }
-
-
 
         /// <summary>
         /// Maps the supplied security elements to a Node/vertex in
@@ -249,6 +261,8 @@ namespace SafePath.Services
                 if (osmGeo.Type != OsmGeoType.Node) continue;
 
                 var node = (Node)osmGeo;
+
+                //we are currently adding some test data. this should be refactored
                 var elementType = CheckForTestData(node);
 
                 //if there wasn't any test data, and there are tags in the
@@ -292,13 +306,62 @@ namespace SafePath.Services
         /// </summary>
         private static SecurityElementTypes? GetElementType(Node node)
         {
-            if (node.Tags.Contains("highway", "street_lamp")) return SecurityElementTypes.StreetLamp;
-            else if (node.Tags.Contains("man_made", "surveillance")) return SecurityElementTypes.CCTV;
-            else if (node.Tags.Contains("amenity", "bus_station")) return SecurityElementTypes.BusStation;
-            else if (node.Tags.Contains("railway", "station")) return SecurityElementTypes.RailwayStation;
-            else if (node.Tags.Contains("amenity", "police")) return SecurityElementTypes.PoliceStation;
+            SecurityElementTypes? type = null;
 
-            return null;
+            foreach (var mapping in Mappings)
+            {
+                foreach (var element in mapping.Values)
+                {
+
+                    foreach (var value in element.Values)
+                    {
+                        if (node.Tags.Contains(element.Key, value))
+                        {
+#if DEBUG
+                            if (type == null) type = mapping.Element;
+                            else
+                            {
+                                Debug.Print("Element with more than one valid mapping: {0}", JsonSerializer.Serialize(node));
+                            }
+#else
+return mapping.Element
+#endif
+                        }
+                    }
+                }
+            }
+#if DEBUG
+            return type;
+#endif
+        }
+
+        /// <summary>
+        /// Reads an object serialized in JSON from a 
+        /// resource file
+        /// </summary>
+        /// <param name="resourcePath">Full path to the resource fail</param>
+        /// <exception cref="InvalidOperationException">Resource was not found in the assembly</exception>
+        private static T ReadFromResources<T>(string resourcePath)
+        {
+            //TODO: move somewhere else where we have common functions
+
+            // Opens the resource stream
+            Assembly assembly = Assembly.GetExecutingAssembly();
+            using Stream? stream = assembly.GetManifestResourceStream(resourcePath);
+            if (stream == null)
+                throw new InvalidOperationException($"Resource {resourcePath} was not found.");
+
+            // Reads the stream
+            using StreamReader reader = new StreamReader(stream);
+            string json = reader.ReadToEnd();
+
+            // Deserializes and returns the object
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            options.Converters.Add(new JsonStringEnumConverter());
+            return JsonSerializer.Deserialize<T>(json, options)!;
         }
     }
 }

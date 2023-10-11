@@ -14,7 +14,9 @@ Console.WriteLine("App Initialized");
 //app workload
 var path = args.FirstOrDefault();
 
-path = "C:\\Code\\SafePath\\abp\\SafePath\\src\\server\\src\\SafeMap.OSMParser\\berlin-latest.osm.pbf";
+//test path
+//path = "C:\\Code\\SafePath\\abp\\SafePath\\src\\server\\src\\SafeMap.OSMParser\\berlin-latest.osm.pbf";
+
 if (string.IsNullOrWhiteSpace(path))
 {
     Console.WriteLine("Please, enter the full path to the .osm.pbf file");
