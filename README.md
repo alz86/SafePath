@@ -1,83 +1,174 @@
 
-# SafePath – Making Every Step Count in Women's Safety
+# SafePath - Making Every Step Count in Women's Safety
 
+## Introduction
 
-**A World Where Every Path Is A Safe Path**
+**SafePath** envisions a world where every path is truly safe. Rooted in the idea that no woman should feel unsafe walking on any street, we've developed a platform leveraging community collaboration and state-of-the-art technology. Going beyond traditional GPS systems, SafePath's app takes into account various safety factors like public lighting, commercial activity, crime rates, and community feedback. By doing so, it doesn't just find the fastest route but the safest one.
 
-Imagine a world where every street you walk down feels like home—where women don't have to glance over their shoulders, clutch their keys like a makeshift weapon, or quicken their pace as darkness falls.
+The strength of SafePath lies in its dual approach. It serves as a tool for the community to find and contribute to safer routes. At the same time, it empowers local governments to actively participate in public safety. By providing them with tools for confidential data upload and API integrations, we aim for a perpetually updated safety map that benefits everyone.
 
-SafePath is the platform to step toward this world.
+In the age where data is as precious as gold, SafePath ensures uncompromised privacy while aiming for unmatched safety. And as an open-source initiative, SafePath is more than just a tool—it's a movement. We invite developers and contributors worldwide to join us in this journey, making safety not just a local concern but a global endeavor.
 
-Designed around community collaboration, and to be bolstered by government support when available, SafePath is aiming for nothing less than transforming the very fabric of urban safety.
+## Project Structure Overview
 
-Now, we need your support to make this vision a reality.
+SafePath is built with a modular architecture, ensuring scalability and ease of understanding for developers and contributors. Here's a high-level overview of our project's main components and directories:
 
-**The Challenge – Darkness Should Not Mean Danger**
+-   **`/src`**: The root directory housing all the source code of the project. Within this directory, you will find:
+    
+    -   **`/itinero`**: This folder contains a fork of the C# project [Itinero](https://github.com/itinero/routing). Itinero is a library geared towards route planning and processing based on OpenStreetMap data. We've opted to fork Itinero to introduce some custom modifications, specifically to integrate our unique safety score when determining routes.
+        
+    -   **`/server`**: This is where our server-side code resides, comprising:
+        
+        -   **API**: Providing core functionalities and serving data.
+        -   **Website**: An administrative interface for the SafePath project.
+    -   **`/mobile`**: Here lies our React Native mobile app, which we fondly refer to as the "reference app". It serves a dual purpose:
+        
+        -   To act as a guide showcasing the optimal way to interact with our API.
+        -   To offer a ready-to-use application, which, if desired, can be rebranded and utilized directly.
 
-Walking alone at night shouldn't be a game of Russian Roulette.
+Furthermore, it's worth noting that SafePath's foundation is laid upon the [ABP.IO](https://abp.io/) framework. ABP.IO provides a solid, modular structure, facilitating the rapid development of enterprise-level applications. For a deeper dive into its capabilities and functionalities, please refer to the official [ABP.IO documentation](https://docs.abp.io/).
 
-Yet, for millions of women worldwide, stepping out in the darkness is tinged with unease, anxiety, and palpable fear.
+## Installation
 
-Catcalls, harassment, and assault are not outliers—they are everyday risks. In an era of unprecedented technological advancements, shouldn't safety be a non-negotiable standard rather than a luxury?
+### Prerequisites
 
-That's where SafePath comes in, providing the technology to create a collaborative walking-safety map, driven by the community and enhanced by the governments that support it.
+1.  **ASP.NET Core**: Ensure you have the ASP.NET Core runtime and SDK installed. Check the official [ASP.NET Core documentation](https://docs.microsoft.com/en-us/aspnet/core/) for installation guides.
+2.  **React Native**: Before working with the mobile app, you'll need to have React Native set up on your machine. Follow the [React Native getting started guide](https://reactnative.dev/docs/getting-started) for installation and setup.
+3.  **Node.js and npm**: React Native requires Node.js and npm. Ensure they are installed. If not, download and install them from [here](https://nodejs.org/).
 
-**How SafePath Works – Navigating Beyond The Obvious**
+### Setting Up the Project
 
-SafePath goes beyond traditional GPS technology.
+1.  **Clone the Repository**:
+    
+    `git clone https://github.com/alz86/SafePath/safepath.git` 
+    
+2.  **Navigate to the Server Directory**:
+    
+    `cd safepath/src/server` 
+    
+3.  **Install Server Dependencies**:
+    
+    `dotnet restore` 
+    
+4.  **Navigate to the Mobile App Directory**:
+    
+    `cd ../mobile` 
 
-When you ask for a route, the app considers multiple direct and indirect safety factors: public lighting, commercial activity level, crime rates, community feedback, etc.
+5. **Install the project dependencies:**
 
-Imagine Google Maps but with an empathetic understanding of the vulnerabilities you may face. Here's how it works:
+	If you haven't installed Yarn, install it first:
 
-**Route Optimization:**  Input your destination, and SafePath will analyze data from various sources to identify the safest route possible.
+	`npm install -g yarn` 
 
-**Community-Powered:**  Mark areas as safe or unsafe and share your experiences to improve the system continually.
+	Then install dependencies using Yarn
 
-**Real-Time Alerts:**  Stay updated receiving alerts for sudden changes in an area's safety index.
+	`yarn install` 
 
-The result? A path that’s not just the quickest but the safest.
+6. **Setup Expo:**
 
-**Power to the People and technology to the Governments**
+	If you haven't installed Expo CLI, do so with:
 
-But SafePath isn't just code; it's a social tool. Women and citizens can use SafePath to find safer routes and contribute to its accuracy and reliability.
+	`npm install -g expo-cli` 
 
-Even more powerfully, local governments can join this safety crusade.
+7. **Configure Environment Variables**:
 
-They can update critical safety metrics, creating a perpetually updated safety map that benefits everyone. SafePath is aware of the challenges governments face and provides solutions: some information -like crime rate- can be marked as confidential, data can be updated in bulk, API integration with internal systems is provided, etc.
+	In the `mobile` directory, there's a file named `.env.template`. Copy this file and rename the copy to `.env`. You can then edit the `.env` file to adjust the configuration settings as needed:
 
-By opting for SafePath, governments acknowledge the safety issue and actively participate in the solution.
+	`cp .env.template .env` 
 
-## Where Innovation Meets Empowerment
+	Open `.env` in your preferred editor and set the configurations explained below.
 
-**Your Safety, Your Data – An Ecosystem of Trust**
+## Configuring API Keys
 
-Consider this…
+### Google API Keys:
 
-Data is the new gold.
+SafePath uses a component for place autocomplete utilizing Google Services.
 
-But unlike gold, data can be stolen, manipulated, or abused—unless protected within the impenetrable vaults of SafePath.
+1.  **Obtaining a Google API Key**:
 
-When it comes to sensitive information like crime rates, you want absolute assurance of confidentiality, don't you?
+    -   You will need a Google API key for this service. You can see the notes in the component's repo [here](https://github.com/FaridSafi/react-native-google-places-autocomplete#installation) (step **2**). 
 
-SafePath offers governments a unique, secure avenue to upload this data privately.
+2. **Configuring the Google API Key in SafePath**:
 
-That's right—improving public safety doesn’t mean compromising on privacy.
+	-   Add the Google API key to `/src/mobile/.env`.
+>In case you want to contribute and have trouble obtaining the Google API Key contact us so we can share our own with you.
 
-**Seamless Integration – The Future is Interconnected**
+## Running the Projects
 
-Picture the day when you can step into any ride-sharing vehicle or hop onto public transit and still feel the invisible yet comforting embrace of SafePath guiding you.
+### ASP.NET Core Server:
 
-Thanks to our API integration capabilities, that day is not a fantasy. Companies, NGOs, and even other developers can integrate SafePath's robust safety-first routing algorithms through different APIs, bringing safety across multiple platforms.
+>Note: Running the `dotnet run` command will occupy the terminal to display logs and messages from the running application. To run both the API and the backend website simultaneously, open a new terminal window or tab for each or append the character `&` at the end of the command to run the projects in background.
 
-Think of it as an invisible safety net expanding every mile and minute.
+1.  **Navigate to the API Directory**:
+    
+    `cd safepath/src/server/src/SafePath.HttpApi.Host` 
+    
+2.  **Run the API**:
+    
+    `dotnet run` 
+    
+    This will start the API service. By default, it should be accessible at `https://localhost:44385`. 
+    
+3.  **Navigate to the Backend Website Directory**:
+        
+    `cd ../SafePath.Blazor` 
+    
+4.  **Run the Backend Website**:
+    
+    `dotnet run` 
+    
+    This will start the backend website at `https://localhost:44359`. 
+    
 
-**The Open-Source Revolution – Safety as a Universal Language**
+### React Native Mobile App (with Expo):
 
-Imagine contributing to a project that could save lives worldwide. That's not just meaningful; that's transformative.
+1.  **Navigate to the Mobile App Directory**:
+    
+    `cd ../../../mobile` 
+    
+2.  **Start the Mobile App with Expo**:
+    
+    `expo start` 
+    
+    A new browser window will open displaying a QR code. Use the Expo Go app on your Android or iOS device to scan the QR code and view the app.
 
-As an open-source project, SafePath invites collaboration like no other. You don't just use SafePath; you become part of SafePath.
+## Usage
 
-By contributing to the code, you're not just a bystander but a changemaker.
+### Using the Admin Website:
 
-You're not just solving a local issue but contributing to a global movement.
+Upon first accessing the admin website, you can log in using the default credentials:
+
+**Username**: `admin`  
+**Password**: `1q2w3E*`
+
+> **Security Warning**: These are default credentials. For security reasons, we strongly recommend changing the password (and username, if possible) once you've accessed the admin interface, especially if deploying in a production environment.
+
+## Contributing
+
+Contributions to SafePath are more than welcome! Whether it's feature enhancements, bug fixes, or documentation improvements, your input is valuable.
+
+1.  **Fork and Clone**: Start by forking this repository. Once done, clone your forked repository to your local machine.
+    
+    `git clone https://github.com/<YourUsername>/SafePath.git` 
+    
+2.  **Branch**: Create a new branch for your contribution.
+    
+    `git checkout -b <branch-name>` 
+    
+3.  **Commit and Push**: Make your changes and commit them. Push them to your forked repository.
+    
+4.  **Pull Request**: Open a pull request to the `master` branch of this repository. Please ensure your pull request describes what you changed and references any related issues.
+
+## Credits
+
+SafePath was conceived and developed by Albano Lazzarini. 
+The initial inspiration for this project was drawn from the challenge issued by the United Nations Office (UNO) and the European Union (UE) called the [Open Source Software for SDG - OSS4SDG](https://ideas.unite.un.org/sdg5/Page/Overview), focusing on SDG #5 (Gender Equality). This challenge aspired to foster open-source solutions addressing the Sustainable Development Goals (SDGs).
+SafePath is our response to [Challenge #4](https://ideas.unite.un.org/sdg5/Page/challenge4) of the competition, aimed at creating a collaborative walking-safety map for women.
+
+Special Acknowledgments:
+
+-   **Design Contributions**: Gratitude is extended to Fernando Debernardi, whose design expertise significantly shaped the visual identity of SafePath. Discover more of his  designs on [his webpage](https://www.movapps.com.ar/).
+    
+-   **Itinero**: This project utilizes a fork of the C# project [Itinero](https://github.com/itinero/routing) — an excellent routing engine tailored for OpenStreetMap data. Our modifications enable the integration of our unique safety score when determining routes.
+    
+-   **ABP.IO**: The foundational architecture of SafePath is constructed upon the [ABP.IO](https://abp.io/) framework. This framework provides a comprehensive, modular structure, aiding in the swift development of enterprise-level applications.
