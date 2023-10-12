@@ -1,4 +1,5 @@
 
+
 # SafePath - Making Every Step Count in Women's Safety
 
 ## Introduction
@@ -7,7 +8,7 @@
 
 The strength of SafePath lies in its dual approach. It serves as a tool for the community to find and contribute to safer routes. At the same time, it empowers local governments to actively participate in public safety. By providing them with tools for confidential data upload and API integrations, we aim for a perpetually updated safety map that benefits everyone.
 
-In the age where data is as precious as gold, SafePath ensures uncompromised privacy while aiming for unmatched safety. And as an open-source initiative, SafePath is more than just a tool—it's a movement. We invite developers and contributors worldwide to join us in this journey, making safety not just a local concern but a global endeavor.
+As an open-source initiative, SafePath is more than just a tool—it's a movement. We invite developers and contributors worldwide to join us in this journey, making safety not just a local concern but a global endeavor.
 
 ## Project Structure Overview
 
@@ -161,11 +162,13 @@ Contributions to SafePath are more than welcome! Whether it's feature enhancemen
 
 ## Credits
 
-SafePath was conceived and developed by Albano Lazzarini. 
+SafePath was conceived and developed by [alz86](https://github.com/alz86). 
+
 The initial inspiration for this project was drawn from the challenge issued by the United Nations Office (UNO) and the European Union (UE) called the [Open Source Software for SDG - OSS4SDG](https://ideas.unite.un.org/sdg5/Page/Overview), focusing on SDG #5 (Gender Equality). This challenge aspired to foster open-source solutions addressing the Sustainable Development Goals (SDGs).
+
 SafePath is our response to [Challenge #4](https://ideas.unite.un.org/sdg5/Page/challenge4) of the competition, aimed at creating a collaborative walking-safety map for women.
 
-Special Acknowledgments:
+### Special Acknowledgments:
 
 -   **Design Contributions**: Gratitude is extended to Fernando Debernardi, whose design expertise significantly shaped the visual identity of SafePath. Discover more of his  designs on [his webpage](https://www.movapps.com.ar/).
     
