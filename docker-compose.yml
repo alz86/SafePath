@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+
+  safepath-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Mount the entire server src directory
+      - ./src/server/src:/app/src/server/src
+      # Mount itinero directory for dependencies
+      - ./src/itinero:/app/src/itinero
+    ports:
+      - "5000:80"
+
+# You may later add other services here, such as databases, caches, or other microservices
