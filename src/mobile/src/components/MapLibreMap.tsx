@@ -38,7 +38,14 @@ const MapLibreMap = ({
       <MapLibreGL.Camera zoomLevel={13} centerCoordinate={startPoint} />
       {shape ? (
         <MapLibreGL.ShapeSource id="routeShape" shape={shape}>
-          <MapLibreGL.LineLayer id="routeLinearLayer" style={{ lineColor: 'blue', lineWidth: 5 }} />
+          <MapLibreGL.LineLayer
+            id="routeLinearLayer"
+            style={{
+              lineColor: '#6177DB',
+              lineWidth: 5,
+              lineDasharray: [2, 1], // dashed pattern
+            }}
+          />
         </MapLibreGL.ShapeSource>
       ) : null}
       {userPosition && (
