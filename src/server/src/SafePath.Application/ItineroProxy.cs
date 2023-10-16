@@ -45,19 +45,19 @@ namespace SafePath
     {
         const int SearchDistanceInMeters = 50;
 
-        private RouterDb routerDb;
-        private Router router;
-        private IProfileInstance[] profiles;
+        private RouterDb? routerDb;
+        private Router? router;
+        private IProfileInstance[]? profiles;
 
-        private IReadOnlyList<MapSecurityElement> securityElements;
-        private GeoJsonFeatureCollection securityLayerGeoJSON;
+        private IReadOnlyList<MapSecurityElement>? securityElements;
+        private GeoJsonFeatureCollection? securityLayerGeoJSON;
 
         public IReadOnlyList<MapSecurityElement> SecurityElements
         {
             get
             {
                 EnsureInited();
-                return securityElements;
+                return securityElements!;
             }
             private set { securityElements = value; }
         }
@@ -67,7 +67,7 @@ namespace SafePath
             get
             {
                 EnsureInited();
-                return securityLayerGeoJSON;
+                return securityLayerGeoJSON!;
             }
             private set { securityLayerGeoJSON = value; }
         }
@@ -102,15 +102,17 @@ namespace SafePath
         /// </summary>
         public string CalculateRoute(SupportedProfile profile, float sourceLatitude, float sourceLongitude, float destLatitude, float destLongitude)
         {
+            EnsureInited();
             var runningProfile = GetItinieroProfile(profile);
             var profileArray = new[] { runningProfile };
 
             //source and target points calculation
+            //TODO: add checking for points out of boundaries
             var sourcePoint = router.TryResolve(profileArray, sourceLatitude, sourceLongitude, SearchDistanceInMeters);
             var targetPoint = router.TryResolve(profileArray, destLatitude, destLongitude, SearchDistanceInMeters);
 
             //safepath custom weight handler creation
-            var factorFn = router.ProfileFactorAndSpeedCache.GetGetFactor(profiles[0]);
+            var factorFn = router!.ProfileFactorAndSpeedCache.GetGetFactor(profiles![0]);
             var safeScoreHandler = new SafePathWeightHandler(factorFn, SafeScoreHandler.Instance);
 
             //route getting
@@ -139,14 +141,14 @@ namespace SafePath
             return result;
         }
 
-        
+
         private async Task LoadScoreParameters(string scoreParamsPath)
         {
             var list = await ReadSupportFile<IList<MapSecurityElement>>(scoreParamsPath);
             SecurityElements = list!.AsReadOnly();
         }
 
-        private async Task LoadMapLibreLayer(string layerPath) => 
+        private async Task LoadMapLibreLayer(string layerPath) =>
             securityLayerGeoJSON = (await ReadSupportFile<GeoJsonFeatureCollection>(layerPath))!;
 
         private static Task InitSafeScoreHandler(string scoreDataPath)
@@ -169,7 +171,7 @@ namespace SafePath
         }
 
         //TODO: refactor, it is quite wimp
-        private IProfileInstance GetItinieroProfile(SupportedProfile profile) => profiles[((int)profile) - 1];
+        private IProfileInstance GetItinieroProfile(SupportedProfile profile) => profiles![((int)profile) - 1];
 
         //TODO: centralice with WriteSupportFile
         private static async Task<T?> ReadSupportFile<T>(string path)

@@ -115,9 +115,9 @@ namespace SafePath.Services
             return SaveSupportFile(outputFilePath, geoJson);
         }
 
-        public static double GetSecurityScoreByType(SecurityElementTypes type)
+        public static float GetSecurityScoreByType(SecurityElementTypes type)
         {
-            double rate = 0;
+            float rate = 0;
             switch (type)
             {
                 case SecurityElementTypes.PoliceStation:
@@ -126,25 +126,25 @@ namespace SafePath.Services
                 case SecurityElementTypes.BusStation:
                 case SecurityElementTypes.Hospital:
                 case SecurityElementTypes.RailwayStation:
-                    rate = 1.5;
+                    rate = 1.5f;
                     break;
                 case SecurityElementTypes.GovernmentBuilding:
-                    rate = 1.4;
+                    rate = 1.4f;
                     break;
                 case SecurityElementTypes.CCTV:
-                    rate = 1.25;
+                    rate = 1.25f;
                     break;
                 case SecurityElementTypes.Leisure:
                 case SecurityElementTypes.Amenity:
                 case SecurityElementTypes.EducationCenter:
                 case SecurityElementTypes.HealthCenter:
-                    rate = 1.2;
+                    rate = 1.2f;
                     break;
                 case SecurityElementTypes.StreetLamp:
-                    rate = 1.1;
+                    rate = 1.1f;
                     break;
                 case SecurityElementTypes.Semaphore:
-                    rate = 1.05;
+                    rate = 1.05f;
                     break;
                 case SecurityElementTypes.Test_5_Points:
                     rate = 5;
@@ -157,7 +157,7 @@ namespace SafePath.Services
 
         public static Task CalculateSafetyScore(IReadOnlyList<MapSecurityElement> elements, string outputFilePath)
         {
-            var safetyInfo = new List<SafetyInfo>(elements.Count);
+            var safetyInfo = new Dictionary<uint, SafetyInfo>(elements.Count);
             foreach (var element in elements)
             {
                 var secRate = GetSecurityScoreByType(element.Type);
@@ -178,13 +178,34 @@ namespace SafePath.Services
                     }
                 }
                 */
-                var info = new SafetyInfo
+
+                //checks if there are already information for this place
+                bool isNewElement = !safetyInfo.TryGetValue(element.EdgeId, out var info);
+                if (isNewElement)
+                {
+                    info = new SafetyInfo
+                    {
+                        EdgeId = element.EdgeId,
+                        VertexId = element.VertexId
+                    };
+                    safetyInfo.Add(info.EdgeId, info);
+                }
+
+                //information about this particular element
+                var elementInfo = new ElementInfo
                 {
                     Latitude = (float)element.Lat,
                     Longitude = (float)element.Lng,
-                    Score = (float)secRate
+                    Score = secRate,
                 };
-                safetyInfo.Add(info);
+                info!.Elements.Add(elementInfo);
+
+                //updates the ActiveElement based on the one with the higher score
+                var currentScore = info.Elements[info.ActiveElement].Score;
+                if (currentScore < secRate)
+                {
+                    info.ActiveElement = info.Elements.Count - 1;
+                }
             }
 
             return SaveSupportFile(outputFilePath, safetyInfo);
@@ -204,7 +225,8 @@ namespace SafePath.Services
         private static Task MapElementsToItinero(RouterDb routerDb, IReadOnlyCollection<MapSecurityElement> elements, string outputFilePath)
         {
             var pedestrian = routerDb.GetSupportedProfile("pedestrian");
-            var profiles = new IProfileInstance[] { pedestrian };
+            var bike = routerDb.GetSupportedProfile("bicycle");
+            var profiles = new IProfileInstance[] { pedestrian, bike };
             var router = new Router(routerDb);
 
             Parallel.ForEach(elements, element =>
@@ -240,6 +262,13 @@ namespace SafePath.Services
             //router db file parsing
             using var stream = File.OpenRead(filePath);
             routerDb.LoadOsmData(stream, new[] { Vehicle.Car, Vehicle.Bicycle, Vehicle.Pedestrian });
+
+            //we try to resolve a random point just to initialize the profiles info
+            var pedestrian = routerDb.GetSupportedProfile("pedestrian");
+            var bike = routerDb.GetSupportedProfile("bicycle");
+            var profiles = new IProfileInstance[] { pedestrian, bike };
+            var router = new Router(routerDb);
+            router.TryResolve(pedestrian, 0, 0, 10);
 
             return routerDb;
         }
@@ -324,15 +353,13 @@ namespace SafePath.Services
                                 Debug.Print("Element with more than one valid mapping: {0}", JsonSerializer.Serialize(node));
                             }
 #else
-return mapping.Element
+                            return mapping.Element;
 #endif
                         }
                     }
                 }
             }
-#if DEBUG
             return type;
-#endif
         }
 
         /// <summary>
@@ -345,15 +372,18 @@ return mapping.Element
         {
             //TODO: move somewhere else where we have common functions
 
+            string json;
             // Opens the resource stream
             Assembly assembly = Assembly.GetExecutingAssembly();
-            using Stream? stream = assembly.GetManifestResourceStream(resourcePath);
-            if (stream == null)
-                throw new InvalidOperationException($"Resource {resourcePath} was not found.");
+            using (Stream? stream = assembly.GetManifestResourceStream(resourcePath))
+            {
+                if (stream == null)
+                    throw new InvalidOperationException($"Resource {resourcePath} was not found.");
 
-            // Reads the stream
-            using StreamReader reader = new StreamReader(stream);
-            string json = reader.ReadToEnd();
+                // Reads the stream
+                using StreamReader reader = new(stream);
+                json = reader.ReadToEnd();
+            }
 
             // Deserializes and returns the object
             var options = new JsonSerializerOptions
