@@ -129,6 +129,7 @@ namespace SafePath
             var point = router.TryResolve(profiles, latitude, longitude, SearchDistanceInMeters);
 
             var result = new PointSearchDto();
+            result.Error = point.IsError;
             if (point.IsError)
             {
                 result.ErrorMessaege = point.ErrorMessage;

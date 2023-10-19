@@ -30,7 +30,7 @@ if (string.IsNullOrWhiteSpace(path))
 }
 
 //var parser = application.ServiceProvider.GetService<IOSMDataParsingService>();
-await new OSMDataParsingService()!.Parse(path);
+await new OSMDataParsingService().Parse(path);
 
 // ABP tier down
 await application.ShutdownAsync();

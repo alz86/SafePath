@@ -13,14 +13,15 @@ using Volo.Abp.AutoMapper;
 using Volo.Abp.Modularity;
 using Volo.Abp.UI.Navigation;
 using Volo.Abp.AspNetCore.Components.WebAssembly.BasicTheme;
+using Volo.Abp.Identity.Blazor.WebAssembly;
 
 namespace SafePath.Blazor;
 
 [DependsOn(
     typeof(AbpAutofacWebAssemblyModule),
     typeof(SafePathHttpApiClientModule),
-    typeof(AbpAspNetCoreComponentsWebAssemblyBasicThemeModule)
-//typeof(AbpIdentityBlazorWebAssemblyModule)
+    typeof(AbpAspNetCoreComponentsWebAssemblyBasicThemeModule),
+    typeof(AbpIdentityBlazorWebAssemblyModule)
 //typeof(AbpTenantManagementBlazorWebAssemblyModule),
 //typeof(AbpSettingManagementBlazorWebAssemblyModule)
 )]

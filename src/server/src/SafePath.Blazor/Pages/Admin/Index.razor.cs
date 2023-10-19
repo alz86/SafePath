@@ -1,12 +1,17 @@
 ﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Configuration;
 using Microsoft.JSInterop;
 using SafePath.DTOs;
 using SafePath.Services;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Reflection.PortableExecutable;
 using System.Threading.Tasks;
 using Volo.Abp;
+using static System.Net.WebRequestMethods;
 
 namespace SafePath.Blazor.Pages.Admin;
 
@@ -81,6 +86,29 @@ public partial class Index
     }
 
 
+    private IBrowserFile? csvFile;
+
+    private void LoadFiles(InputFileChangeEventArgs e)
+    {
+        csvFile = e.GetMultipleFiles()?.FirstOrDefault();
+    }
+
+    private async Task UploadFile()
+    {
+        if (csvFile == null || csvFile.Size == 0)
+            throw new UserFriendlyException("There is not file selected to upload.");
+        else if (csvFile.Size == 0)
+            throw new UserFriendlyException("The selected file is empty.");
+        else if (csvFile.Size > Constants.MaxCsvFileSize)
+            throw new UserFriendlyException("The selected file to upload is too big. The maximum size allowed is 50MB.");
+
+        string fileContent;
+        using (var stream = new StreamReader(csvFile.OpenReadStream()))
+            fileContent = await stream.ReadToEndAsync();
+
+        var resp = await AreaService.UploadCrimeReportCSV(fileContent);
+    }
+
     public class MapBounds
     {
         public Coordinate northeast { get; set; }
@@ -92,4 +120,6 @@ public partial class Index
         public double lat { get; set; }
         public double lng { get; set; }
     }
+
+
 }
