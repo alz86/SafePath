@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using SafePath.Localization;
+﻿using SafePath.Localization;
 using Volo.Abp.Application.Services;
 
 namespace SafePath;

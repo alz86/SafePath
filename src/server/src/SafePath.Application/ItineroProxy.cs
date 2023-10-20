@@ -19,6 +19,11 @@ namespace SafePath
     /// Class providing methods to use Itinero functionalities
     /// from SafePath
     /// </summary>
+    /// <remarks>
+    /// This class acts as a bridge between SafePath
+    /// and Itinero, meant to be the single point of contact
+    /// between both sections of the system.
+    /// </remarks>
     public interface IItineroProxy : ISingletonDependency
     {
         /// <summary>
@@ -28,13 +33,35 @@ namespace SafePath
         /// <returns>String with route path in Geocode Json</returns>
         string CalculateRoute(SupportedProfile profile, float sourceLatitude, float sourceLongitude, float destLatitude, float destLongitude);
 
+        /// <summary>
+        /// Gets the EdgeId Itinero associates to the
+        /// supplied coordinates
+        /// </summary>
         PointSearchDto GetItineroEdgeIds(float latitude, float longitude);
 
+        /// <summary>
+        /// Initializes the object, doing heavy task like
+        /// reading the map DB from the disk.
+        /// </summary>
         Task Init(string basePath);
 
+        /// <summary>
+        /// Indicates whether the object has been
+        /// initied.
+        /// </summary>
         bool Initied { get; }
 
+        /// <summary>
+        /// Gets the list of security elements (police stations,
+        /// hospital, bus stops, etc.) associated to the system's 
+        /// default area.
+        /// </summary>
         IReadOnlyList<MapSecurityElement> SecurityElements { get; }
+
+        /// <summary>
+        /// Gets the GeoJSON representation of an extra layer drawn over
+        /// system's maps to show the different security elements mapped.
+        /// </summary>
         GeoJsonFeatureCollection SecurityLayerGeoJSON { get; }
     }
 
@@ -52,6 +79,9 @@ namespace SafePath
         private IReadOnlyList<MapSecurityElement>? securityElements;
         private GeoJsonFeatureCollection? securityLayerGeoJSON;
 
+        /// <summary>
+        /// <inheritdoc />
+        /// </summary>
         public IReadOnlyList<MapSecurityElement> SecurityElements
         {
             get
@@ -62,6 +92,9 @@ namespace SafePath
             private set { securityElements = value; }
         }
 
+        /// <summary>
+        /// <inheritdoc />
+        /// </summary>
         public GeoJsonFeatureCollection SecurityLayerGeoJSON
         {
             get
@@ -72,16 +105,25 @@ namespace SafePath
             private set { securityLayerGeoJSON = value; }
         }
 
+        /// <summary>
+        /// Ensures that the current has been initialized.
+        /// Otherwise, it fails.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown if the object hasn't been initialized.
+        /// </exception>
         private void EnsureInited()
         {
-            if (!Initied) throw new InvalidOperationException($"Property {nameof(SecurityElements)} cannot be accessed before the object be initialized.");
+            if (!Initied) throw new InvalidOperationException($"Tried to accesss an ItineroProxy object before it was initialized.");
         }
 
+        /// <summary>
+        /// <inheritdoc />
+        /// </summary>
         public bool Initied { get; private set; } = false;
 
         /// <summary>
-        /// Initializes the object, doing heavy task like
-        /// reading the map DB from the disk.
+        /// <inheritdoc />
         /// </summary>
         public async Task Init(string basePath)
         {
@@ -89,7 +131,7 @@ namespace SafePath
             var itineroFileNamingProvider = new ItineroFilesNamingProvider(basePath);
             await Task.WhenAll(new[]
             {
-                InitRouter(itineroFileNamingProvider.ItineroRouteFileName),
+                InitItineroRouter(itineroFileNamingProvider.ItineroRouteFileName),
                 InitSafeScoreHandler(itineroFileNamingProvider.SafetyScoreValuesFileName),
                 LoadScoreParameters(itineroFileNamingProvider.SafetyScoreParametersFileName),
                 LoadMapLibreLayer(itineroFileNamingProvider.MapLibreLayerFileName)
@@ -100,6 +142,7 @@ namespace SafePath
         /// <summary>
         /// <inheritdoc />
         /// </summary>
+
         public string CalculateRoute(SupportedProfile profile, float sourceLatitude, float sourceLongitude, float destLatitude, float destLongitude)
         {
             EnsureInited();
@@ -123,7 +166,9 @@ namespace SafePath
             return route.Value.ToGeoJson();
         }
 
-
+        /// <summary>
+        /// <inheritdoc />
+        /// </summary>
         public PointSearchDto GetItineroEdgeIds(float latitude, float longitude)
         {
             var point = router.TryResolve(profiles, latitude, longitude, SearchDistanceInMeters);
@@ -142,16 +187,34 @@ namespace SafePath
             return result;
         }
 
-
+        /// <summary>
+        /// Loads the information used as parameters to calculate the 
+        /// safety scores.
+        /// </summary>
+        /// <param name="scoreParamsPath">Path of the file storing the information.</param>
         private async Task LoadScoreParameters(string scoreParamsPath)
         {
             var list = await ReadSupportFile<IList<MapSecurityElement>>(scoreParamsPath);
             SecurityElements = list!.AsReadOnly();
         }
 
+        /// <summary>
+        /// Loads the extra layer created to display the security
+        /// elements in the system maps.
+        /// </summary>
+        /// <param name="scoreParamsPath">Path of the file storing the information.</param>
         private async Task LoadMapLibreLayer(string layerPath) =>
             securityLayerGeoJSON = (await ReadSupportFile<GeoJsonFeatureCollection>(layerPath))!;
 
+        /// <summary>
+        /// Initializes the object used to access the security scores
+        /// when calculating routes.
+        /// </summary>
+        /// <param name="scoreDataPath">Path of the file storing the safety scores</param>
+        /// <remarks>
+        /// This structure is inherited from the Proof-of-concept version of the
+        /// system and soon will be refactored.
+        /// </remarks>
         private static Task InitSafeScoreHandler(string scoreDataPath)
         {
             //TODO: refactor to do not have an static object anymore
@@ -159,7 +222,12 @@ namespace SafePath
             return SafeScoreHandler.Instance.LoadProcessedValuesFromFile(scoreDataPath);
         }
 
-        private Task InitRouter(string routeDbDataPath)
+        /// <summary>
+        /// Inits the components associated to Itinero
+        /// </summary>
+        /// <param name="routeDbDataPath">Path to the Itinero db
+        /// file already created.</param>
+        private Task InitItineroRouter(string routeDbDataPath)
         {
             using (var stream = File.OpenRead(routeDbDataPath))
                 this.routerDb = RouterDb.Deserialize(stream);

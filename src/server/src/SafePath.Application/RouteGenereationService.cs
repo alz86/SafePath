@@ -35,9 +35,10 @@ namespace SafePath
             this.itineroProxy = itineroProxy;
         }
 
+        /// <summary>
+        /// <inheritdoc />
+        /// </summary>
         public Task<string> CalculateRoute(SupportedProfile profile, float sourceLatitude, float sourceLongitude, float destLatitude, float destLongitude) =>
             Task.FromResult(itineroProxy.CalculateRoute(profile, sourceLatitude, sourceLongitude, destLatitude, destLongitude));
     }
-
-
 }

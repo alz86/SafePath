@@ -1,5 +1,9 @@
 ﻿namespace SafePath.Classes
 {
+    /// <summary>
+    /// Class representing a map element that 
+    /// can be used to calculate the security rate of a path.
+    /// </summary>
     public class SecurityElement
     {
         public double Lat { get; set; }

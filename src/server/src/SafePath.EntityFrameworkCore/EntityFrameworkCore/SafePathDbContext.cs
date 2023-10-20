@@ -14,6 +14,7 @@ using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
 
+
 namespace SafePath.EntityFrameworkCore;
 
 [ReplaceDbContext(typeof(IIdentityDbContext))]
@@ -26,6 +27,9 @@ public class SafePathDbContext :
 {
     /* Add DbSet properties for your Aggregate Roots / Entities here. */
     public DbSet<Area> Areas { get; set; }
+    public DbSet<CrimeDataUploading> CrimeDataUploading { get; set; }
+    public DbSet<CrimeDataUploadingEntry> CrimeDataUploadingEntry { get; set; }
+
 
     #region Entities from the modules
 
@@ -78,13 +82,9 @@ public class SafePathDbContext :
         builder.ConfigureTenantManagement();
 
         /* Configure your own tables/entities inside here */
-        builder.Entity<Area>(b => b.ToTable("Area", SafePathConsts.DbSchema)); ;
-
-        //builder.Entity<YourEntity>(b =>
-        //{
-        //    b.ToTable(SafePathConsts.DbTablePrefix + "YourEntities", SafePathConsts.DbSchema);
-        //    b.ConfigureByConvention(); //auto configure for the base class props
-        //    //...
-        //});
+        builder.Entity<Area>(b => b.ToTable("Area", SafePathConsts.DbSchema));
+        builder.Entity<CrimeDataUploading>(b => b.ToTable("CrimeDataUploading", SafePathConsts.DbSchema));
+        builder
+            .Entity<CrimeDataUploadingEntry>(b => b.ToTable("CrimeDataUploadingEntry", SafePathConsts.DbSchema));
     }
 }

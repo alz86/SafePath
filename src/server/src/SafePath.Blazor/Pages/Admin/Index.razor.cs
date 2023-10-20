@@ -1,34 +1,41 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.Extensions.Configuration;
 using Microsoft.JSInterop;
 using SafePath.DTOs;
 using SafePath.Services;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
-using System.Reflection.PortableExecutable;
 using System.Threading.Tasks;
 using Volo.Abp;
-using static System.Net.WebRequestMethods;
+using Volo.Abp.AspNetCore.Components.Messages;
 
 namespace SafePath.Blazor.Pages.Admin;
 
 public partial class Index
 {
+    public IUiMessageService UIMessageService { get; set; }
+
+    /// <summary>
+    /// Service to access the Area API. 
+    /// </summary>
     public IAreaService AreaService { get; set; }
 
+    /// <summary>
+    /// List of areas the current user can administrate.
+    /// </summary>
+    /// <remarks>
+    /// The system currently supports only one area, but in a
+    /// next phase will support many.
+    /// </remarks>
     protected IList<AreaDto>? Areas { get; set; }
 
+    /// <summary>
+    /// Area selected by the user.
+    /// </summary>
     protected AreaDto? SelectedArea { get; set; }
 
     protected GeoJsonFeatureCollection SecurityElements { get; set; }
-
-    protected IConfiguration Configuration { get; set; }
-
-
-    protected string? TileServer { get => Configuration?["Settings.TileServer"]; }
 
 
     protected override async Task OnInitializedAsync()
@@ -56,17 +63,6 @@ public partial class Index
 
         // Here, you can update the map with new coordinates based on the selected Area.
         await JSRuntime.InvokeVoidAsync("updateMapCoordinates", SelectedArea.InitialLatitude, SelectedArea.InitialLongitude);
-    }
-
-
-    private async Task UpdateMapData()
-    {
-        // Add logic to update map data
-    }
-
-    private async Task UpdateCrimeRate()
-    {
-        // Add logic to update crime rate
     }
 
     private async Task ToggleLayer(string layerType)
@@ -107,19 +103,17 @@ public partial class Index
             fileContent = await stream.ReadToEndAsync();
 
         var resp = await AreaService.UploadCrimeReportCSV(fileContent);
+        if (!resp.Success)
+        {
+            //TODO: add validation errors to the UI
+            var errorMessage = resp.ValidationErrors?.Count > 0
+                ? "The selected file contains errors. Please fix them and try again."
+                : "An error occurred while uploading the file. Please try again later.";
+            throw new UserFriendlyException(errorMessage);
+        }
+        else
+        {
+            await UIMessageService.Success("The file was uploaded successfully.");
+        }
     }
-
-    public class MapBounds
-    {
-        public Coordinate northeast { get; set; }
-        public Coordinate southwest { get; set; }
-    }
-
-    public class Coordinate
-    {
-        public double lat { get; set; }
-        public double lng { get; set; }
-    }
-
-
 }

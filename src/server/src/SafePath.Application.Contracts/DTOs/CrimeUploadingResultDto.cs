@@ -4,7 +4,7 @@ namespace SafePath.DTOs
 {
     public class CrimeUploadingResultDto
     {
-        public bool Error { get; set; }
+        public bool Success { get; set; }
 
         public IDictionary<int, CrimeEntryValidationResult>? ValidationErrors { get; set; }
     }

@@ -2,6 +2,12 @@
 
 namespace SafePath.Services
 {
+    /// <summary>
+    /// Helper class that provides the names
+    /// to use to access different files with
+    /// information associated to Itinero or
+    /// the safety score.
+    /// </summary>
     public class ItineroFilesNamingProvider
     {
         private readonly string baseFileName;

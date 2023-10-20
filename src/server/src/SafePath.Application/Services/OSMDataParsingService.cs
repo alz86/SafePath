@@ -22,11 +22,22 @@ using System.Text.Json.Serialization;
 
 namespace SafePath.Services
 {
+    /// <summary>
+    /// Class with different methods to parse an OSM file
+    /// and get information relevant to the system.
+    /// </summary>
     public interface IOSMDataParsingService : IApplicationService
     {
+        /// <summary>
+        /// Parses the supplied OSM file and extracts
+        /// information relevant to the system.
+        /// </summary>
         Task Parse(string filePath);
     }
 
+    /// <summary>
+    /// <inheritdoc />
+    /// </summary>
     public class OSMDataParsingService : ApplicationService, IOSMDataParsingService
     {
         private static IList<SecurityElementMapping>? mappings;
@@ -45,6 +56,9 @@ namespace SafePath.Services
             }
         }
 
+        /// <summary>
+        /// <inheritdoc />
+        /// </summary>
         public async Task Parse(string filePath)
         {
             //TODO: this is method is not running truly concurrently, despite
