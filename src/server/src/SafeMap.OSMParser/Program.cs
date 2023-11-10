@@ -1,5 +1,10 @@
-﻿using SafePath.Services;
+﻿using Microsoft.Extensions.DependencyInjection;
+using SafePath.Entities;
+using SafePath.Entities.FastStorage;
+using SafePath.Repositories.FastStorage;
+using SafePath.Services;
 using Volo.Abp;
+using Volo.Abp.Domain.Repositories;
 
 Console.WriteLine("Initializing App");
 
@@ -30,7 +35,16 @@ if (string.IsNullOrWhiteSpace(path))
 }
 
 //var parser = application.ServiceProvider.GetService<IOSMDataParsingService>();
-await new OSMDataParsingService().Parse(path);
+//OSMDataParsingService(IRepository<Area, Guid> areaRepository, IStorageProviderService storageProviderService, IAreaSetupProgressService areaSetupProgressService, ISafetyScoreCalculator safetyScoreCalculator, IFastStorageRepositoryBase<MapElement> mapElementRepository, IFastStorageRepositoryBase<SafetyScoreElement> safetyScoreElementRepository)
+var areaRepository = application.Services.GetRequiredService<IRepository<Area, Guid>>();
+var storageProviderService = application.Services.GetRequiredService<IStorageProviderService>();
+var areaSetupProgressService = application.Services.GetRequiredService<IAreaSetupProgressService>();
+var safetyScoreCalculator = application.Services.GetRequiredService<ISafetyScoreCalculator>();
+var mapElementRepository = application.Services.GetRequiredService<IFastStorageRepositoryBase<MapElement>>();
+var safetyScoreElementRepository = application.Services.GetRequiredService<IFastStorageRepositoryBase<SafetyScoreElement>>();
+
+var s = new OSMDataParsingService(areaRepository, storageProviderService, areaSetupProgressService, safetyScoreCalculator, mapElementRepository, safetyScoreElementRepository);
+await s.Parse(Guid.NewGuid(), new[] { "..", "..", "..", "Data" });
 
 // ABP tier down
 await application.ShutdownAsync();

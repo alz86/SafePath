@@ -51,6 +51,5 @@ namespace SafePath.Services
                 await AreaRepository.InsertAsync(berlinArea);
             }
         }
-
     }
 }

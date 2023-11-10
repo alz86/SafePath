@@ -30,6 +30,12 @@ using Volo.Abp.VirtualFileSystem;
 using System.Threading.Tasks;
 using SafePath.Services;
 using Volo.Abp.AspNetCore.Mvc.UI;
+using Microsoft.AspNetCore.Hosting;
+using Volo.Abp.Domain.Repositories;
+using SafePath.Entities;
+using Volo.Abp.Uow;
+using Microsoft.AspNetCore.ResponseCompression;
+using System.IO.Compression;
 
 namespace SafePath;
 
@@ -44,7 +50,7 @@ namespace SafePath;
     typeof(AbpAspNetCoreSerilogModule),
     typeof(AbpSwashbuckleModule)
 )]
-public class SafePathHttpApiHostModule : AbpModule
+public partial class SafePathHttpApiHostModule : AbpModule
 {
     public override void PreConfigureServices(ServiceConfigurationContext context)
     {
@@ -71,6 +77,25 @@ public class SafePathHttpApiHostModule : AbpModule
         var configuration = context.Services.GetConfiguration();
         var hostingEnvironment = context.Services.GetHostingEnvironment();
 
+        //response compression
+        context.Services.AddResponseCompression(options =>
+        {
+            options.EnableForHttps = true;
+            options.Providers.Add<BrotliCompressionProvider>();
+            options.Providers.Add<GzipCompressionProvider>();
+            options.MimeTypes = ResponseCompressionDefaults.MimeTypes;
+        });
+
+        context.Services.Configure<BrotliCompressionProviderOptions>(options =>
+        {
+            options.Level = CompressionLevel.SmallestSize;
+        });
+
+        context.Services.Configure<GzipCompressionProviderOptions>(options =>
+        {
+            options.Level = CompressionLevel.SmallestSize;
+        });
+
         ConfigureAuthentication(context);
         ConfigureBundles();
         ConfigureUrls(configuration);
@@ -78,6 +103,8 @@ public class SafePathHttpApiHostModule : AbpModule
         ConfigureVirtualFileSystem(context);
         ConfigureCors(context, configuration);
         ConfigureSwaggerServices(context, configuration);
+
+        context.Services.AddSingleton<IBaseFolderProviderService, AspnetCoreBaseFolderProviderService>();
     }
 
     private void ConfigureAuthentication(ServiceConfigurationContext context)
@@ -226,19 +253,37 @@ public class SafePathHttpApiHostModule : AbpModule
         app.UseAuditing();
         app.UseAbpSerilogEnrichers();
         app.UseConfiguredEndpoints();
+
+        app.UseResponseCompression();
+
     }
 
     public override async Task OnPostApplicationInitializationAsync(ApplicationInitializationContext context)
     {
         await base.OnPostApplicationInitializationAsync(context);
 
-        var itineroProxy = context.ServiceProvider.GetService<IItineroProxy>()!;
-        if (!itineroProxy.Initied)
+        await CheckItineroProxy(context.ServiceProvider);
+    }
+
+    /// <summary>
+    /// Checks for the status of the ItineroProxy object and initializes it if needed.
+    /// </summary>
+    private static async Task CheckItineroProxy(IServiceProvider serviceProvider)
+    {
+        var itineroProxy = serviceProvider.GetService<IItineroProxy>()!;
+        if (itineroProxy.Initied) return;
+
+        //a new unit of work has to be created, otherwise it won't work.
+        var unitOfWorkManager = serviceProvider.GetService<IUnitOfWorkManager>();
+        using (var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false))
         {
-            //TODO: currently, for dev purposes, we only support Berlin
-            var basePathResolver = context.ServiceProvider.GetService<IBasePathResolver>()!;
-            var osmDataPath = Path.Combine(basePathResolver.BasePath, "Resources", "berlin-latest.osm.pbf");
-            await itineroProxy.Init(osmDataPath);
+            //TODO: currently, for dev purposes, we only support one Area.
+            var area = await serviceProvider.GetService<IRepository<Area, Guid>>()!.FirstOrDefaultAsync();
+            if (area == null) return;
+
+            //TODO: Ugly code, but soon we will no longer use files except for Itinero database and all this will be refactored.
+            var areaBaseKeys = new[] { "Resources", area.Id.ToString() };
+            await itineroProxy.Init(areaBaseKeys);
         }
     }
 }

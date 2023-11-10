@@ -1,6 +1,8 @@
 import { BASE_SERVER_URL } from '@env';
 
-const baseServerUrl = BASE_SERVER_URL;
+// const devUrl = 'https://127.0.0.1:44385/api/app/';
+const devUrl = 'https://192.168.40.131:443/api/app/';
+const baseServerUrl = devUrl || BASE_SERVER_URL;
 
 export const get = (url: string, data?: any) => {
   const requestUrl = baseServerUrl + url + (data ? `?${buildQueryString(data)}` : '');

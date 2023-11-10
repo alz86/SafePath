@@ -1,5 +1,4 @@
 ﻿using Itinero;
-using System.IO;
 using System.Threading.Tasks;
 using Itinero.Profiles;
 using Itinero.Safety;
@@ -12,6 +11,7 @@ using System;
 using System.Linq;
 using static SafePath.ItineroProxy;
 using SafePath.Services;
+using SafePath.Entities.FastStorage;
 
 namespace SafePath
 {
@@ -43,7 +43,7 @@ namespace SafePath
         /// Initializes the object, doing heavy task like
         /// reading the map DB from the disk.
         /// </summary>
-        Task Init(string basePath);
+        Task Init(string[] folderKeys);
 
         /// <summary>
         /// Indicates whether the object has been
@@ -56,13 +56,16 @@ namespace SafePath
         /// hospital, bus stops, etc.) associated to the system's 
         /// default area.
         /// </summary>
-        IReadOnlyList<MapSecurityElement> SecurityElements { get; }
+        IReadOnlyList<MapElement> SecurityElements { get; }
 
         /// <summary>
         /// Gets the GeoJSON representation of an extra layer drawn over
         /// system's maps to show the different security elements mapped.
         /// </summary>
         GeoJsonFeatureCollection SecurityLayerGeoJSON { get; }
+
+
+        Task UpdatePoint(Guid areaId, IEnumerable<PointDto> points);
     }
 
     /// <summary>
@@ -70,19 +73,35 @@ namespace SafePath
     /// </summary>
     public class ItineroProxy : IItineroProxy
     {
+        /// <summary>
+        /// Gets the list of routing profiles that SafePath currently
+        /// supports
+        /// </summary>
+        private static readonly string[] SupportedProfiles = new[] { "pedestrian", "bicycle" };
+
         const int SearchDistanceInMeters = 50;
 
         private RouterDb? routerDb;
         private Router? router;
         private IProfileInstance[]? profiles;
 
-        private IReadOnlyList<MapSecurityElement>? securityElements;
+        private IList<MapElement>? securityElementsList;
+        private IReadOnlyList<MapElement>? securityElements;
         private GeoJsonFeatureCollection? securityLayerGeoJSON;
+
+        private readonly IStorageProviderService storageProviderService;
+        private readonly ISafetyScoreRepository safetyScoreRepository;
+
+        public ItineroProxy(IStorageProviderService storageProviderService, ISafetyScoreRepository safetyScoreRepository)
+        {
+            this.storageProviderService = storageProviderService;
+            this.safetyScoreRepository = safetyScoreRepository;
+        }
 
         /// <summary>
         /// <inheritdoc />
         /// </summary>
-        public IReadOnlyList<MapSecurityElement> SecurityElements
+        public IReadOnlyList<MapElement> SecurityElements
         {
             get
             {
@@ -91,6 +110,7 @@ namespace SafePath
             }
             private set { securityElements = value; }
         }
+
 
         /// <summary>
         /// <inheritdoc />
@@ -125,16 +145,12 @@ namespace SafePath
         /// <summary>
         /// <inheritdoc />
         /// </summary>
-        public async Task Init(string basePath)
+        public async Task Init(string[] folderKeys)
         {
-            //TODO: make truly parallel
-            var itineroFileNamingProvider = new ItineroFilesNamingProvider(basePath);
             await Task.WhenAll(new[]
             {
-                InitItineroRouter(itineroFileNamingProvider.ItineroRouteFileName),
-                InitSafeScoreHandler(itineroFileNamingProvider.SafetyScoreValuesFileName),
-                LoadScoreParameters(itineroFileNamingProvider.SafetyScoreParametersFileName),
-                LoadMapLibreLayer(itineroFileNamingProvider.MapLibreLayerFileName)
+                Task.Run(() => InitItineroRouter(folderKeys.Append(OSMDataParsingService.ItineroDbFileName))),
+                Task.Run(() => LoadMapLibreLayer(folderKeys.Append(OSMDataParsingService.MapLibreLayerFileName)))
             });
             Initied = true;
         }
@@ -142,7 +158,6 @@ namespace SafePath
         /// <summary>
         /// <inheritdoc />
         /// </summary>
-
         public string CalculateRoute(SupportedProfile profile, float sourceLatitude, float sourceLongitude, float destLatitude, float destLongitude)
         {
             EnsureInited();
@@ -156,7 +171,7 @@ namespace SafePath
 
             //safepath custom weight handler creation
             var factorFn = router!.ProfileFactorAndSpeedCache.GetGetFactor(profiles![0]);
-            var safeScoreHandler = new SafePathWeightHandler(factorFn, SafeScoreHandler.Instance);
+            var safeScoreHandler = new SafePathWeightHandler(factorFn, safetyScoreRepository);
 
             //route getting
             var route = router.TryCalculate(runningProfile, safeScoreHandler, sourcePoint.Value, targetPoint.Value);
@@ -188,64 +203,93 @@ namespace SafePath
         }
 
         /// <summary>
-        /// Loads the information used as parameters to calculate the 
-        /// safety scores.
-        /// </summary>
-        /// <param name="scoreParamsPath">Path of the file storing the information.</param>
-        private async Task LoadScoreParameters(string scoreParamsPath)
-        {
-            var list = await ReadSupportFile<IList<MapSecurityElement>>(scoreParamsPath);
-            SecurityElements = list!.AsReadOnly();
-        }
-
-        /// <summary>
         /// Loads the extra layer created to display the security
         /// elements in the system maps.
         /// </summary>
         /// <param name="scoreParamsPath">Path of the file storing the information.</param>
-        private async Task LoadMapLibreLayer(string layerPath) =>
+        private async Task LoadMapLibreLayer(string[] layerPath) =>
             securityLayerGeoJSON = (await ReadSupportFile<GeoJsonFeatureCollection>(layerPath))!;
 
-        /// <summary>
-        /// Initializes the object used to access the security scores
-        /// when calculating routes.
-        /// </summary>
-        /// <param name="scoreDataPath">Path of the file storing the safety scores</param>
-        /// <remarks>
-        /// This structure is inherited from the Proof-of-concept version of the
-        /// system and soon will be refactored.
-        /// </remarks>
-        private static Task InitSafeScoreHandler(string scoreDataPath)
-        {
-            //TODO: refactor to do not have an static object anymore
-            SafeScoreHandler.Instance = new SafeScoreHandler();
-            return SafeScoreHandler.Instance.LoadProcessedValuesFromFile(scoreDataPath);
-        }
+        
 
         /// <summary>
         /// Inits the components associated to Itinero
         /// </summary>
         /// <param name="routeDbDataPath">Path to the Itinero db
         /// file already created.</param>
-        private Task InitItineroRouter(string routeDbDataPath)
+        private void InitItineroRouter(string[] routeDbDataPath)
         {
-            using (var stream = File.OpenRead(routeDbDataPath))
+            using (var stream = storageProviderService.OpenRead(routeDbDataPath))
                 this.routerDb = RouterDb.Deserialize(stream);
 
             this.router = new Router(routerDb);
 
-            this.profiles = SafeScoreHandler.SupportedProfiles.Select(routerDb.GetSupportedProfile).ToArray();
+            this.profiles = SupportedProfiles.Select(routerDb.GetSupportedProfile).ToArray();
+        }
 
-            return Task.CompletedTask;
+        public enum PointUpateResult
+        {
+            Error,
+            PointNotFound,
+            Success,
+            NotChanged
+        }
+
+        public async Task UpdatePoint(Guid areaId, IEnumerable<PointDto> points)
+        {
+            //TODO: this code duplicates what is on OSMDataParsingService, but everything will be
+            //refactored soon, so it will be deleted.
+            var results = new List<PointUpateResult>(points.Count());
+            foreach (var point in points)
+            {
+                var type = (SecurityElementTypes)point.Type;
+                var secElement = SecurityElements.FirstOrDefault(s => s.Lat == point.Coordinates.Lat && s.Lng == point.Coordinates.Lng);
+                var isNew = secElement == null;
+                if (isNew)
+                {
+                    var itineroInfo = GetItineroEdgeIds((float)point.Coordinates.Lat, (float)point.Coordinates.Lng);
+                    if (itineroInfo.Error)
+                    {
+                        results.Add(PointUpateResult.PointNotFound);
+                        continue;
+                    }
+
+                    secElement = new MapElement
+                    {
+                        Lng = point.Coordinates.Lng,
+                        Lat = point.Coordinates.Lat,
+                        Type = type,
+                        EdgeId = itineroInfo.EdgeId!.Value,
+                        VertexId = itineroInfo.VertexId!.Value,
+                    };
+                    securityElementsList!.Add(secElement);
+                }
+                else if (secElement!.Type == type)
+                {
+                    results.Add(PointUpateResult.NotChanged);
+                    continue;
+                }
+
+                //if reached here, it is a new element or a change of type.
+                //in any case, we have to update the rest of the supplementary
+                //info (safety score and maplibre map).
+                secElement.Type = type;
+
+
+
+                results.Add(PointUpateResult.Success);
+            }
+
+            var hasChanged = results.Any(r => r == PointUpateResult.Success);
         }
 
         //TODO: refactor, it is quite wimp
         private IProfileInstance GetItinieroProfile(SupportedProfile profile) => profiles![((int)profile) - 1];
 
         //TODO: centralice with WriteSupportFile
-        private static async Task<T?> ReadSupportFile<T>(string path)
+        private async Task<T?> ReadSupportFile<T>(string[] path)
         {
-            using var stream = File.OpenRead(path);
+            using var stream = storageProviderService.OpenRead(path);
             return await JsonSerializer.DeserializeAsync<T>(stream);
 
         }

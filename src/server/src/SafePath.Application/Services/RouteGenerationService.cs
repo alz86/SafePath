@@ -2,13 +2,13 @@
 using Volo.Abp.Application.Services;
 using static SafePath.ItineroProxy;
 
-namespace SafePath
+namespace SafePath.Services
 {
     /// <summary>
     /// Service with methods related to the
     /// generation of safe routes.
     /// </summary>
-    public interface IRouteGenereationService : IApplicationService
+    public interface IRouteGenerationService : IApplicationService
     {
         /// <summary>
         /// Calculates a pedestrian route based on the
@@ -27,10 +27,10 @@ namespace SafePath
     /// <summary>
     /// <inheritdoc />
     /// </summary>
-    public class RouteGenereationService : ApplicationService, IRouteGenereationService
+    public class RouteGenerationService : ApplicationService, IRouteGenerationService
     {
         private readonly IItineroProxy itineroProxy;
-        public RouteGenereationService(IItineroProxy itineroProxy)
+        public RouteGenerationService(IItineroProxy itineroProxy)
         {
             this.itineroProxy = itineroProxy;
         }

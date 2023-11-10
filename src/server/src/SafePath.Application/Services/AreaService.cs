@@ -18,6 +18,7 @@ using Area = SafePath.Entities.Area;
 
 namespace SafePath.Services
 {
+
     /// <summary>
     /// <inheritdoc />
     /// </summary>
@@ -156,5 +157,6 @@ namespace SafePath.Services
             using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
             return csv.GetRecords<CrimeEntry>().ToList();
         }
+
     }
 }

@@ -1,4 +1,5 @@
-﻿namespace SafePath.DTOs
+﻿
+namespace SafePath.DTOs
 {
     public class MapSecurityElementDto
     {

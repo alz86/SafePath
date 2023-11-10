@@ -1,0 +1,215 @@
+﻿@page "/setup"
+@using Blazorise
+@using System.Threading;
+@using SafePath.Classes;
+@using SafePath.DTOs;
+@inject SafePath.Services.ISystemAdminService systemAdminService;
+@inject NavigationManager NavigationManager;
+
+<!-- State Variables -->
+@code {
+
+    //textbox backing fields
+    private string name = "";
+    private string fileUrl = "";
+    private string latitudeInput = "";
+    private string longitudeInput = "";
+    private double latitude;
+    private double longitude;
+
+    //importing-related fields
+    private bool isImportInProgress = false, isImportComplete = false;
+    private int progress = 0; // Ranges from 0 to 9
+    private Timer? updateTimer;
+    private AreaSetupProgress? setupProgress;
+
+}
+
+<!-- Styles -->
+<style>
+    .logo-big {
+        width: 600px; /* You can adjust the value */
+        margin-top: 150px; /* Push the logo a bit down */
+    }
+
+    .custom-container {
+        max-width: 50%;
+        margin: auto;
+    }
+
+    .small-input {
+        max-width: 150px;
+    }
+
+    .split-input-container {
+        display: flex;
+        align-items: center;
+        border: 1px solid #ced4da;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.25rem;
+        width: 70%; /* Adjust based on your requirements */
+        margin: auto;
+    }
+
+    .split-input {
+        flex: 1;
+        outline: none;
+        border: none;
+        padding: 0;
+    }
+
+    .split-divider {
+        margin: 0 10px;
+    }
+
+</style>
+
+<!-- Main Container -->
+<!-- Main Container -->
+<div class="container text-center mt-5">
+    <!-- Logo -->
+    <img src="/images/logo/logo.svg" alt="SafePath Logo" class="img-fluid mb-4" style="width: 350px;"> <!-- You can adjust the max-width as needed -->
+    <!-- Content Below -->
+    <div style="max-width: 50%; margin: auto;">
+        <!-- Added this div for 40% width -->
+        @if (!isImportInProgress)
+        {
+            <h4>
+                There is no OpenStreetMap data imported in the system. <br />
+                We need it to set up the platform. <br /><br />
+                Please provide the necessary details to start importing:
+                <br />
+            </h4>
+
+            <!-- Input Fields -->
+            <!-- Name Input -->
+            <div class="row mb-3 mt-5">
+                <div class="col-12">
+                    <TextEdit id="nameField" @bind-Text="name" Placeholder="Name" />
+                    <small class="form-text text-muted">This is the name of the city/state/area you are importing.</small>
+                </div>
+            </div>
+
+            <!-- File URL Input -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <TextEdit id="fileUrlField" @bind-Text="fileUrl" Placeholder="OSM File URL" />
+                    <small class="form-text text-muted">Provide a direct link to the OpenStreetMap data file you wish to import.</small>
+                </div>
+            </div>
+
+            <!-- Latitude & Longitude Inputs -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <h6 class="mb-2">Enter the coordinates to center the map:</h6>
+                    <div class="split-input-container">
+                        <TextEdit id="latitudeField" @bind-Text="latitudeInput" Placeholder="Latitude" Class="split-input" />
+                        <span class="split-divider">/</span>
+                        <TextEdit id="longitudeField" @bind-Text="longitudeInput" Placeholder="Longitude" Class="split-input" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Start Import Button -->
+            <Button Color="Color.Primary" Clicked="StartImport" Size="Size.Large">Start Importing</Button>
+        }
+        else if (isImportInProgress && !isImportComplete)
+        {
+            <h4>
+                Import process is in progress. <br /> This might take around 10 minutes. <br /> <br />
+                Below you can see the progress of the process.<br /><br />
+            </h4>
+
+            <!-- Progress Bar -->
+            <Progress Value="@progress" ShowValue="true" Animated Striped
+                       Min="0" Max="8" />
+            <br />
+            <br />
+            <!-- Cancel Import Button -->
+            <Button Color="Color.Danger" Clicked="CancelImport" Size="Size.Large">Cancel Import</Button>
+        }
+        else if (isImportComplete)
+        {
+            <h4>
+                <br />
+                Import process has completed successfully! 🎉 <br /><br />
+                Your OpenStreetMap data has been imported and the platform is now set up.
+            </h4>
+            <br />
+            <br />
+            <Button Color="Color.Primary" Size="Size.Large" Clicked="GoToDashboard">Go to Dashboard</Button>
+        }
+    </div>
+</div>
+@code {
+
+    private void GoToDashboard()
+    {
+        NavigationManager.NavigateTo("/admin/index");
+    }
+
+    private async Task StartImport()
+    {
+        isImportInProgress = true;
+
+        // Parse the latitude and longitude
+        //TODO: handle errors
+        if (double.TryParse(latitudeInput, out double lat))
+        {
+            latitude = lat;
+        }
+        if (double.TryParse(longitudeInput, out double lon))
+        {
+            longitude = lon;
+        }
+
+        var dto = new CreateAreaInputDto
+            {
+                Name = name,
+                OSMFileUrl = fileUrl,
+                Latitude = latitude,
+                Longitude = longitude
+            };
+
+        var areaId = await systemAdminService.CreateArea(dto);
+        //var areaId = new Guid("C6694EC0-7A21-D791-1F12-3A0E9111B428");
+        //if the area was created, then we show the progress bar and indicate the user
+        //the setup is in progress
+        CheckSetupStatus(areaId);
+    }
+
+    private void CheckSetupStatus(Guid areaId)
+    {
+        // Start a timer or use another method to poll the server for progress updates.
+        // Update the 'progress' variable accordingly.
+        updateTimer = new Timer(async (state) =>
+        {
+            var currentStatus = await systemAdminService.GetAreaSetupProgress(areaId);
+
+            if (currentStatus <= setupProgress) return; //no changes
+
+            setupProgress = currentStatus;
+            progress = (int)currentStatus;
+
+            //if the process completed
+            isImportComplete = currentStatus == AreaSetupProgress.Completed;
+            if (isImportComplete)
+            {
+                updateTimer?.Dispose();
+                updateTimer = null;
+            }
+
+            //updates the UI
+            StateHasChanged();
+
+        }, null, 0, 3000);
+
+    }
+
+    private async Task CancelImport()
+    {
+        // TODO: Send a cancellation request to the server.
+
+        isImportInProgress = false;
+    }
+}

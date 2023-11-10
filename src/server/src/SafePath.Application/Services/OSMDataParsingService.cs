@@ -12,7 +12,6 @@ using System.IO;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using SafetyInfo = Itinero.SafePath.SafetyInfo;
 using Volo.Abp.Application.Services;
 using SafePath.DTOs;
 using SafePath.Classes;
@@ -20,6 +19,11 @@ using System.Reflection;
 using System.Diagnostics;
 using System.Text.Json.Serialization;
 using Volo.Abp;
+using Volo.Abp.Domain.Repositories;
+using System.Net.Http;
+using Area = SafePath.Entities.Area;
+using SafePath.Entities.FastStorage;
+using SafePath.Repositories.FastStorage;
 
 namespace SafePath.Services
 {
@@ -29,11 +33,13 @@ namespace SafePath.Services
     /// </summary>
     public interface IOSMDataParsingService : IApplicationService
     {
+        Task ImportData(Guid areaId);
+
         /// <summary>
         /// Parses the supplied OSM file and extracts
         /// information relevant to the system.
         /// </summary>
-        Task Parse(string filePath);
+        Task Parse(Guid areaId, string[] tempFilePathKeys);
     }
 
     /// <summary>
@@ -42,7 +48,28 @@ namespace SafePath.Services
     [RemoteService(false)]
     public class OSMDataParsingService : ApplicationService, IOSMDataParsingService
     {
+        public const string ItineroDbFileName = "routeDb.pdb";
+        public const string MapLibreLayerFileName = "maplibre.layer.json";
+
         private static IList<SecurityElementMapping>? mappings;
+
+        private readonly IRepository<Area, Guid> areaRepository;
+        private readonly IStorageProviderService storageProviderService;
+        private readonly IAreaSetupProgressService areaSetupProgressService;
+        private readonly ISafetyScoreCalculator safetyScoreCalculator;
+        private readonly IFastStorageRepositoryBase<MapElement> mapElementRepository;
+        private readonly IFastStorageRepositoryBase<SafetyScoreElement> safetyScoreElementRepository;
+
+        public OSMDataParsingService(IRepository<Area, Guid> areaRepository, IStorageProviderService storageProviderService, IAreaSetupProgressService areaSetupProgressService, ISafetyScoreCalculator safetyScoreCalculator, IFastStorageRepositoryBase<MapElement> mapElementRepository, IFastStorageRepositoryBase<SafetyScoreElement> safetyScoreElementRepository)
+        {
+            this.areaRepository = areaRepository;
+            this.storageProviderService = storageProviderService;
+            this.areaSetupProgressService = areaSetupProgressService;
+            this.safetyScoreCalculator = safetyScoreCalculator;
+            this.mapElementRepository = mapElementRepository;
+            this.safetyScoreElementRepository = safetyScoreElementRepository;
+        }
+
         protected static IList<SecurityElementMapping> Mappings
         {
             get
@@ -61,26 +88,26 @@ namespace SafePath.Services
         /// <summary>
         /// <inheritdoc />
         /// </summary>
-        public async Task Parse(string filePath)
+        public async Task Parse(Guid areaId, string[] tempFilePathKeys)
         {
             //TODO: this is method is not running truly concurrently, despite
             //running tasks at the same time. This code has to be refactored
             //to using Task.Run instead of multiple tasks run with Task.WhenAll.
+            if (!await storageProviderService.Exists(tempFilePathKeys))
+                throw new Exception($"File not found.");
 
-            if (!File.Exists(filePath))
-                throw new Exception($"File not found at path: {filePath}");
-
-            var itineroFilesNamingProvider = new ItineroFilesNamingProvider(filePath);
 
             //TODO: check if it can run in parallel to FindSecurityElements
-            var routerDb = GetRouterDbFromOSM(filePath);
+            var routerDb = GetRouterDbFromOSM(tempFilePathKeys);
+
+            var areaBaseKeys = new[] { "Resources", areaId.ToString() };
 
             //task to save routerDb to disk and read from there onwards
-            var saveTask = SaveRouterDbCache(routerDb, itineroFilesNamingProvider.ItineroRouteFileName);
+            var saveTask = SaveRouterDbCache(routerDb, areaId, areaBaseKeys.Append(ItineroDbFileName));
 
             //task to iterate through nodes and find elements to include
             //in the safety algorithm
-            var findTask = FindSecurityElements(filePath);
+            var findTask = FindSecurityElements(areaId, tempFilePathKeys);
 
             //completes both tasks
             await Task.WhenAll(new[] { saveTask, findTask });
@@ -89,16 +116,149 @@ namespace SafePath.Services
             //we need to map them all to its associated Edge and vertex
             //values in routerDb, to later use it to map the route weight correctly
             var elements = findTask.Result;
-            var itineroMapTask = MapElementsToItinero(routerDb, elements, itineroFilesNamingProvider.SafetyScoreParametersFileName);
+            var itineroMapTask = Task.Run(() => MapElementsToItinero(routerDb, elements, areaId));
 
             //in parallel, we calculate the safety score for every element
-            var safetyScoreTask = CalculateSafetyScore(elements, itineroFilesNamingProvider.SafetyScoreValuesFileName);
+            var safetyScoreTask = Task.Run(() => CalculateSafetyScore(areaId, elements));
 
-            var createMaplibreLayerTask = CreateMapLibreDataLayer(elements, itineroFilesNamingProvider.MapLibreLayerFileName);
+            var createMaplibreLayerTask = CreateMapLibreDataLayer(areaId, elements, areaBaseKeys.Append(MapLibreLayerFileName));
 
             await Task.WhenAll(new[] { itineroMapTask, safetyScoreTask, createMaplibreLayerTask });
 
+            //everything is done. we mark the area as completed
+            areaSetupProgressService.MarkStepCompleted(areaId, AreaSetupProgress.Completed);
+
             //TODO: adapt IItineroProxy to be able to read the data directly from memory objects.
+        }
+
+        private RouterDb GetRouterDbFromOSM(string[] keys)
+        {
+            var routerDb = new RouterDb();
+
+            //router db file parsing
+            using (var stream = storageProviderService.OpenRead(keys))
+                routerDb.LoadOsmData(stream, new[] { Vehicle.Car, Vehicle.Bicycle, Vehicle.Pedestrian });
+
+            //we try to resolve a random point just to initialize the profiles info
+            var pedestrian = routerDb.GetSupportedProfile("pedestrian");
+            var bike = routerDb.GetSupportedProfile("bicycle");
+            var profiles = new IProfileInstance[] { pedestrian, bike };
+            var router = new Router(routerDb);
+            router.TryResolve(pedestrian, 0, 0, 10);
+
+            return routerDb;
+        }
+
+        private Task SaveRouterDbCache(RouterDb routerDb, Guid areaId, string[] keys)
+        {
+            //information parsed in saved, to avoid the need of parsing it again
+            using var outputStream = storageProviderService.OpenWrite(keys);
+            routerDb.Serialize(outputStream);
+            areaSetupProgressService.MarkStepCompleted(areaId, AreaSetupProgress.BuildingItineroMap);
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Iterates through OpenStreetMap file looking
+        /// for elements to be included in the safety score
+        /// algorythm
+        /// </summary>
+        private Task<List<MapElement>> FindSecurityElements(Guid areaId, string[] keys)
+        {
+            using var stream = storageProviderService.OpenRead(keys);
+            var source = new PBFOsmStreamSource(stream);
+
+            var elements = new List<MapElement>(50000);
+            // Process each OSM object.
+            foreach (var osmGeo in source)
+            {
+                if (osmGeo.Type != OsmGeoType.Node) continue;
+
+                var node = (Node)osmGeo;
+
+                //we are currently adding some test data. this should be refactored
+                var elementType = CheckForTestData(node);
+
+                //if there wasn't any test data, and there are tags in the
+                //node, we look for security elements
+                if (elementType == null && node.Tags?.Any() == true)
+                {
+                    elementType = GetElementType(node);
+                }
+
+                if (elementType == null) continue;
+
+                var element = new MapElement
+                {
+                    Type = elementType.Value,
+                    Lat = node.Latitude!.Value,
+                    Lng = node.Longitude!.Value,
+                    OSMNodeId = node.Id!.Value
+                };
+                elements.Add(element);
+            }
+
+            areaSetupProgressService.MarkStepCompleted(areaId, AreaSetupProgress.LookingForSecurityElements);
+            return Task.FromResult(elements);
+        }
+
+        /// <summary>
+        /// Maps the supplied security elements to a Node/vertex in
+        /// Itinero route DB.
+        /// </summary>
+        private void MapElementsToItinero(RouterDb routerDb, IReadOnlyCollection<MapElement> elements, Guid areaId)
+        {
+            var pedestrian = routerDb.GetSupportedProfile("pedestrian");
+            var bike = routerDb.GetSupportedProfile("bicycle");
+            var profiles = new IProfileInstance[] { pedestrian, bike };
+            var router = new Router(routerDb);
+
+            Parallel.ForEach(elements, element =>
+            {
+                var point = router.TryResolve(profiles, (float)element.Lat, (float)element.Lng, 50);
+                if (point.IsError)
+                {
+                    element.ItineroMappingError = point.ErrorMessage;
+                }
+                else
+                {
+                    element.EdgeId = point.Value.EdgeId;
+                    element.VertexId = point.Value.VertexId(routerDb);
+                }
+            });
+
+            //task completed
+            areaSetupProgressService.MarkStepCompleted(areaId, AreaSetupProgress.MappingElementsToItinero);
+        }
+
+        private async Task CalculateSafetyScore(Guid areaId, IReadOnlyList<MapElement> elements)
+        {
+            var safetyInfoList = new List<SafetyScoreElement>(1000);
+            foreach (var element in elements)
+            {
+                if (element.EdgeId == null) continue;
+
+                //checks if there are already information for this place
+                var safetyInfo = safetyInfoList.FirstOrDefault(s => s.EdgeId == element.EdgeId.Value);
+                safetyInfo ??= new SafetyScoreElement
+                {
+                    EdgeId = element.EdgeId.Value,
+                };
+                safetyInfo.MapElements.Add(element);
+            }
+
+            //once we have the whole list of elements mapped, we calculate the safety score
+            //for every one
+            Parallel.ForEach(safetyInfoList, si => si.Score = safetyScoreCalculator.Calculate(si.MapElements));
+
+            // Asynchronous I/O-bound operations
+            await Task.WhenAll(
+                mapElementRepository.InsertManyAsync(elements),
+                safetyScoreElementRepository.InsertManyAsync(safetyInfoList)
+            );
+            await safetyScoreElementRepository.SaveChangesAsync();
+
+            areaSetupProgressService.MarkStepCompleted(areaId, AreaSetupProgress.CalculatingSecurityScore);
         }
 
         /// <summary>
@@ -106,7 +266,7 @@ namespace SafePath.Services
         /// in MapLibre to show the list of security elements
         /// mapped for this Area
         /// </summary>
-        private static Task CreateMapLibreDataLayer(IReadOnlyList<MapSecurityElement> elements, string outputFilePath)
+        private async Task CreateMapLibreDataLayer(Guid areaId, IReadOnlyList<MapElement> elements, string[] keys)
         {
             var geoJson = new GeoJsonFeatureCollection();
 
@@ -128,208 +288,16 @@ namespace SafePath.Services
                 geoJson.Features.Add(feature);
             }
 
-            return SaveSupportFile(outputFilePath, geoJson);
+            await SaveSupportFile(keys, geoJson);
+
+            areaSetupProgressService.MarkStepCompleted(areaId, AreaSetupProgress.CreateMapLibreLayer);
         }
 
-        public static float GetSecurityScoreByType(SecurityElementTypes type)
-        {
-            float rate = 0;
-            switch (type)
-            {
-                case SecurityElementTypes.PoliceStation:
-                    rate = 2;
-                    break;
-                case SecurityElementTypes.BusStation:
-                case SecurityElementTypes.Hospital:
-                case SecurityElementTypes.RailwayStation:
-                    rate = 1.5f;
-                    break;
-                case SecurityElementTypes.GovernmentBuilding:
-                    rate = 1.4f;
-                    break;
-                case SecurityElementTypes.CCTV:
-                    rate = 1.25f;
-                    break;
-                case SecurityElementTypes.Leisure:
-                case SecurityElementTypes.Amenity:
-                case SecurityElementTypes.EducationCenter:
-                case SecurityElementTypes.HealthCenter:
-                    rate = 1.2f;
-                    break;
-                case SecurityElementTypes.StreetLamp:
-                    rate = 1.1f;
-                    break;
-                case SecurityElementTypes.Semaphore:
-                    rate = 1.05f;
-                    break;
-                case SecurityElementTypes.Test_5_Points:
-                    rate = 5;
-                    break;
-            }
-
-            //TODO: add context variation
-            return rate;
-        }
-
-        public static Task CalculateSafetyScore(IReadOnlyList<MapSecurityElement> elements, string outputFilePath)
-        {
-            var safetyInfo = new Dictionary<uint, SafetyInfo>(elements.Count);
-            foreach (var element in elements)
-            {
-                var secRate = GetSecurityScoreByType(element.Type);
-                //TODO: complete radiance
-                /*
-                if (element.Radiance.HasValue)
-                {
-                    foreach (var otherElement in elements)
-                    {
-                        var distance = CalculateDistance(
-                            element.Lat, element.Long,
-                            otherElement.Lat, otherElement.Long
-                        );
-                        if (distance <= element.Radiance.Value)
-                        {
-                            otherElement.SecurityRate += element.SecurityRate;
-                        }
-                    }
-                }
-                */
-
-                //checks if there are already information for this place
-                bool isNewElement = !safetyInfo.TryGetValue(element.EdgeId, out var info);
-                if (isNewElement)
-                {
-                    info = new SafetyInfo
-                    {
-                        EdgeId = element.EdgeId,
-                        VertexId = element.VertexId
-                    };
-                    safetyInfo.Add(info.EdgeId, info);
-                }
-
-                //information about this particular element
-                var elementInfo = new ElementInfo
-                {
-                    Latitude = (float)element.Lat,
-                    Longitude = (float)element.Lng,
-                    Score = secRate,
-                };
-                info!.Elements.Add(elementInfo);
-
-                //updates the ActiveElement based on the one with the higher score
-                var currentScore = info.Elements[info.ActiveElement].Score;
-                if (currentScore < secRate)
-                {
-                    info.ActiveElement = info.Elements.Count - 1;
-                }
-            }
-
-            return SaveSupportFile(outputFilePath, safetyInfo);
-        }
-
-        private static async Task SaveSupportFile(string outputFilePath, object data)
+        private async Task SaveSupportFile(string[] keys, object data)
         {
             //TODO: save using protobuf.
-            using var stream = File.OpenWrite(outputFilePath);
+            using var stream = storageProviderService.OpenWrite(keys);
             await JsonSerializer.SerializeAsync(stream, data);
-        }
-
-        /// <summary>
-        /// Maps the supplied security elements to a Node/vertex in
-        /// Itinero route DB.
-        /// </summary>
-        private static Task MapElementsToItinero(RouterDb routerDb, IReadOnlyCollection<MapSecurityElement> elements, string outputFilePath)
-        {
-            var pedestrian = routerDb.GetSupportedProfile("pedestrian");
-            var bike = routerDb.GetSupportedProfile("bicycle");
-            var profiles = new IProfileInstance[] { pedestrian, bike };
-            var router = new Router(routerDb);
-
-            Parallel.ForEach(elements, element =>
-            {
-                var point = router.TryResolve(profiles, (float)element.Lat, (float)element.Lng, 50);
-                if (point.IsError)
-                {
-                    element.ItineroMappingError = point.ErrorMessage;
-                }
-                else
-                {
-                    element.EdgeId = point.Value.EdgeId;
-                    element.VertexId = point.Value.VertexId(routerDb);
-                }
-            });
-
-            //we save the result for future uses
-            return SaveSupportFile(outputFilePath, elements);
-        }
-
-        private static Task SaveRouterDbCache(RouterDb routerDb, string filePath)
-        {
-            //information parsed in saved, to avoid the need of parsing it again
-            using var outputStream = File.OpenWrite(filePath);
-            routerDb.Serialize(outputStream);
-            return Task.CompletedTask;
-        }
-
-        private static RouterDb GetRouterDbFromOSM(string filePath)
-        {
-            var routerDb = new RouterDb();
-
-            //router db file parsing
-            using var stream = File.OpenRead(filePath);
-            routerDb.LoadOsmData(stream, new[] { Vehicle.Car, Vehicle.Bicycle, Vehicle.Pedestrian });
-
-            //we try to resolve a random point just to initialize the profiles info
-            var pedestrian = routerDb.GetSupportedProfile("pedestrian");
-            var bike = routerDb.GetSupportedProfile("bicycle");
-            var profiles = new IProfileInstance[] { pedestrian, bike };
-            var router = new Router(routerDb);
-            router.TryResolve(pedestrian, 0, 0, 10);
-
-            return routerDb;
-        }
-
-        /// <summary>
-        /// Iterates through OpenStreetMap file looking
-        /// for elements to be included in the safety score
-        /// algorythm
-        /// </summary>
-        private static Task<List<MapSecurityElement>> FindSecurityElements(string filePath)
-        {
-            using var stream = File.OpenRead(filePath);
-            var source = new PBFOsmStreamSource(stream);
-
-            var elements = new List<MapSecurityElement>(1000);
-            // Process each OSM object.
-            foreach (var osmGeo in source)
-            {
-                if (osmGeo.Type != OsmGeoType.Node) continue;
-
-                var node = (Node)osmGeo;
-
-                //we are currently adding some test data. this should be refactored
-                var elementType = CheckForTestData(node);
-
-                //if there wasn't any test data, and there are tags in the
-                //node, we look for security elements
-                if (elementType == null && node?.Tags?.Any() == true)
-                {
-                    elementType = GetElementType(node);
-                }
-
-                if (elementType == null) continue;
-
-                var element = new MapSecurityElement
-                {
-                    Type = elementType.Value,
-                    Lat = node!.Latitude!.Value,
-                    Lng = node.Longitude!.Value,
-                    OSMNodeId = node.Id!.Value
-                };
-                elements.Add(element);
-            }
-
-            return Task.FromResult(elements);
         }
 
         private static SecurityElementTypes? CheckForTestData(Node node)
@@ -408,6 +376,71 @@ namespace SafePath.Services
             };
             options.Converters.Add(new JsonStringEnumConverter());
             return JsonSerializer.Deserialize<T>(json, options)!;
+        }
+
+        //[Authorize(TenantManagementPermissions.Tenants.Create)]
+        public async Task ImportData(Guid areaId)
+        {
+            var area = await areaRepository.FirstOrDefaultAsync(a => a.Id == areaId);
+            if (area == null) throw new AbpException("Area not found");
+            else if (area.OsmFileUrl.IsNullOrWhiteSpace()) throw new AbpException("OSM file URL not set");
+            else if (area.OsmDataImported) return;
+
+            //to show progress to the user, we have fitst "dummy" step of starting download
+            areaSetupProgressService.MarkStepCompleted(area.Id, AreaSetupProgress.StartingDownload);
+
+            //the real download starts
+            var tempFileName = $"{area.Id}.osm.pbf";
+            var storageKeys = new[] { "Temp", "OSM", tempFileName };
+            await DownloadOSMData(area.OsmFileUrl!, storageKeys);
+            areaSetupProgressService.MarkStepCompleted(area.Id, AreaSetupProgress.DownloadOSMFile);
+
+            //after the file was downloaded, the heavy task of parsing it starts
+            await Parse(area.Id, storageKeys);
+
+            //import completed. we update the entity in the DB
+            area.OsmDataImported = true;
+            await areaRepository.UpdateAsync(area);
+        }
+
+        private async Task DownloadOSMData(string osmFileUrl, params string[] storageKeys)
+        {
+            using HttpClient client = new HttpClient();
+
+            var response = await client.GetAsync(osmFileUrl);
+            if (!response.IsSuccessStatusCode)
+                throw new AbpException($"Failed to download OSM file. Status: {response.StatusCode}");
+
+            var byteContent = await response.Content.ReadAsByteArrayAsync();
+            await storageProviderService.SaveContents(byteContent, storageKeys);
+
+            /*
+            //TODO: implement download in chunks, like below
+            // Download in chunks
+            const int chunkSize = 1024 * 1024; // e.g., 1MB chunks
+            while (true)
+            {
+                client.DefaultRequestHeaders.Range = new System.Net.Http.Headers.RangeHeaderValue(startRange, startRange + chunkSize - 1);
+                using HttpResponseMessage response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Failed to download chunk. Status: {response.StatusCode}");
+                    return;
+                }
+
+                byte[] buffer = await response.Content.ReadAsByteArrayAsync();
+                await fileStream.WriteAsync(buffer, 0, buffer.Length);
+
+                // If the response is incomplete, then there's more data to download
+                if (response.Content.Headers.ContentRange.Length == response.Content.Headers.ContentRange.To)
+                {
+                    break; // download is complete
+                }
+
+                startRange += buffer.Length;
+            }
+            */
         }
     }
 }

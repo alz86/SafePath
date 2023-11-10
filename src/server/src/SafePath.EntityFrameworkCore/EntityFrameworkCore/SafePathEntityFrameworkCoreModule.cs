@@ -12,6 +12,8 @@ using Volo.Abp.OpenIddict.EntityFrameworkCore;
 using Volo.Abp.PermissionManagement.EntityFrameworkCore;
 using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
+using SafePath.EntityFrameworkCore.FastStorage;
+using SafePath.Repositories.FastStorage;
 
 namespace SafePath.EntityFrameworkCore;
 
@@ -38,17 +40,35 @@ public class SafePathEntityFrameworkCoreModule : AbpModule
     {
         context.Services.AddAbpDbContext<SafePathDbContext>(options =>
         {
-                /* Remove "includeAllEntities: true" to create
-                 * default repositories only for aggregate roots */
+            /* Remove "includeAllEntities: true" to create
+             * default repositories only for aggregate roots */
             options.AddDefaultRepositories(includeAllEntities: true);
         });
 
+        context.Services.AddAbpDbContext<SqliteDbContext>(options =>
+        {
+            /* Remove "includeAllEntities: true" to create
+             * default repositories only for aggregate roots */
+            options.AddDefaultRepositories(includeAllEntities: true);
+        });
+
+        // Configura el proveedor de base de datos para cada contexto
         Configure<AbpDbContextOptions>(options =>
         {
-                /* The main point to change your DBMS.
-                 * See also SafePathMigrationsDbContextFactory for EF Core tooling. */
-            options.UseSqlServer();
+            options.Configure<SafePathDbContext>(c =>
+            {
+                c.UseSqlServer();
+            });
+
+            options.Configure<SqliteDbContext>(c =>
+            {
+                c.UseSqlite();
+            });
         });
+
+        context.Services.AddScoped(typeof(IFastStorageRepositoryBase<>), typeof(FastStorageRepositoryBase<,>));
+        context.Services.AddScoped<ISafetyScoreElementRepository, SafetyScoreElementRepository>();
+
 
     }
 }

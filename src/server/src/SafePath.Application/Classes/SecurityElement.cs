@@ -1,5 +1,7 @@
 ﻿namespace SafePath.Classes
 {
+    //TODO: remove
+
     /// <summary>
     /// Class representing a map element that 
     /// can be used to calculate the security rate of a path.

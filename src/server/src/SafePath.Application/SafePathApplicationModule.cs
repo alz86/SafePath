@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Account;
 using Volo.Abp.AutoMapper;
+using Volo.Abp.BackgroundJobs;
 using Volo.Abp.FeatureManagement;
 using Volo.Abp.Identity;
 using Volo.Abp.Modularity;
@@ -22,7 +23,8 @@ namespace SafePath;
     typeof(AbpPermissionManagementApplicationModule),
     typeof(AbpTenantManagementApplicationModule),
     typeof(AbpFeatureManagementApplicationModule),
-    typeof(AbpSettingManagementApplicationModule)
+    typeof(AbpSettingManagementApplicationModule),
+    typeof(AbpBackgroundJobsModule)
     )]
 public class SafePathApplicationModule : AbpModule
 {
@@ -34,5 +36,8 @@ public class SafePathApplicationModule : AbpModule
         {
             options.AddMaps<SafePathApplicationModule>();
         });
+
+        context.Services.AddSingleton<IStorageProviderService, HardDiskStorageProviderService>();
+        context.Services.AddTransient<ISafetyScoreCalculator, SimpleSafetyScoreCalculator>();
     }
 }

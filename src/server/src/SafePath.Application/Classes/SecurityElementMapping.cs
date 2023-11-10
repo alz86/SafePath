@@ -1,4 +1,5 @@
 ﻿using Itinero.SafePath;
+using SafePath.Entities.FastStorage;
 using System.Collections.Generic;
 
 namespace SafePath.Classes
