@@ -2,6 +2,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.TenantManagement;
@@ -11,6 +12,7 @@ namespace SafePath.Services
     /// <summary>
     /// <inheritdoc />
     /// </summary>
+    [RemoteService(false)]
     public class TestDataService : SafePathAppService, ITestDataService
     {
         public ITenantAppService TenantAppService { get; set; }

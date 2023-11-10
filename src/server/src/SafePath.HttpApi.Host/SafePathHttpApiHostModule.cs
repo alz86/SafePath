@@ -29,6 +29,7 @@ using Volo.Abp.UI.Navigation.Urls;
 using Volo.Abp.VirtualFileSystem;
 using System.Threading.Tasks;
 using SafePath.Services;
+using Volo.Abp.AspNetCore.Mvc.UI;
 
 namespace SafePath;
 
@@ -38,7 +39,7 @@ namespace SafePath;
     typeof(AbpAspNetCoreMultiTenancyModule),
     typeof(SafePathApplicationModule),
     typeof(SafePathEntityFrameworkCoreModule),
-    typeof(AbpAspNetCoreMvcUiLeptonXLiteThemeModule),
+    typeof(AbpAspNetCoreMvcUiModule),
     typeof(AbpAccountWebOpenIddictModule),
     typeof(AbpAspNetCoreSerilogModule),
     typeof(AbpSwashbuckleModule)

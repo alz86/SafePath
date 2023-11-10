@@ -19,6 +19,7 @@ using SafePath.Classes;
 using System.Reflection;
 using System.Diagnostics;
 using System.Text.Json.Serialization;
+using Volo.Abp;
 
 namespace SafePath.Services
 {
@@ -38,6 +39,7 @@ namespace SafePath.Services
     /// <summary>
     /// <inheritdoc />
     /// </summary>
+    [RemoteService(false)]
     public class OSMDataParsingService : ApplicationService, IOSMDataParsingService
     {
         private static IList<SecurityElementMapping>? mappings;
