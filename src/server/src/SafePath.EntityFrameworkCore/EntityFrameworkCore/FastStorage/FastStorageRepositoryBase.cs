@@ -33,7 +33,6 @@ namespace SafePath.EntityFrameworkCore.FastStorage
                 throw new ArgumentException("No elements provided to insert.", nameof(elements));
 
             await DbContext.Set<TEntity>().AddRangeAsync(elements);
-            await DbContext.SaveChangesAsync();
         }
 
         public void Update(TEntity entity)

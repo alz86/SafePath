@@ -14,6 +14,10 @@ using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.TenantManagement.EntityFrameworkCore;
 using SafePath.EntityFrameworkCore.FastStorage;
 using SafePath.Repositories.FastStorage;
+using System.Threading.Tasks;
+using Volo.Abp;
+using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
 
 namespace SafePath.EntityFrameworkCore;
 
@@ -36,39 +40,42 @@ public class SafePathEntityFrameworkCoreModule : AbpModule
         SafePathEfCoreEntityExtensionMappings.Configure();
     }
 
+    public override async Task OnApplicationInitializationAsync(ApplicationInitializationContext context)
+    {
+        await base.OnApplicationInitializationAsync(context);
+
+        //configures the sqlite DB to run completely in memory
+        await context
+            .ServiceProvider
+            .GetRequiredService<SqliteDbContext>()
+            .SetupDBToWorkInMemory();
+    }
+
     public override void ConfigureServices(ServiceConfigurationContext context)
     {
+        /* Remove "includeAllEntities: true" to create
+         * default repositories only for aggregate roots */
         context.Services.AddAbpDbContext<SafePathDbContext>(options =>
-        {
-            /* Remove "includeAllEntities: true" to create
-             * default repositories only for aggregate roots */
-            options.AddDefaultRepositories(includeAllEntities: true);
-        });
+            options.AddDefaultRepositories(includeAllEntities: true)
+        );
 
-        context.Services.AddAbpDbContext<SqliteDbContext>(options =>
-        {
-            /* Remove "includeAllEntities: true" to create
-             * default repositories only for aggregate roots */
-            options.AddDefaultRepositories(includeAllEntities: true);
-        });
-
-        // Configura el proveedor de base de datos para cada contexto
         Configure<AbpDbContextOptions>(options =>
         {
-            options.Configure<SafePathDbContext>(c =>
-            {
-                c.UseSqlServer();
-            });
-
-            options.Configure<SqliteDbContext>(c =>
-            {
-                c.UseSqlite();
-            });
+            /* The main point to change your DBMS.
+             * See also SafePathMigrationsDbContextFactory for EF Core tooling. */
+            options.UseSqlServer();
         });
 
+        // Sqlite configuration
+        var configuration = context.Services.GetConfiguration();
+        var connectionString = configuration.GetConnectionString("Sqlite");
+
+        context.Services.AddDbContext<SqliteDbContext>(
+            options => options.UseSqlite(connectionString));
+
+        //service mapping
         context.Services.AddScoped(typeof(IFastStorageRepositoryBase<>), typeof(FastStorageRepositoryBase<,>));
         context.Services.AddScoped<ISafetyScoreElementRepository, SafetyScoreElementRepository>();
-
-
+        context.Services.AddScoped<IMapElementRepository, MapElementRepository>();
     }
 }

@@ -57,10 +57,12 @@ namespace SafePath.Services
         private readonly IStorageProviderService storageProviderService;
         private readonly IAreaSetupProgressService areaSetupProgressService;
         private readonly ISafetyScoreCalculator safetyScoreCalculator;
-        private readonly IFastStorageRepositoryBase<MapElement> mapElementRepository;
-        private readonly IFastStorageRepositoryBase<SafetyScoreElement> safetyScoreElementRepository;
+        private readonly IMapElementRepository mapElementRepository;
+        private readonly ISafetyScoreElementRepository safetyScoreElementRepository;
 
-        public OSMDataParsingService(IRepository<Area, Guid> areaRepository, IStorageProviderService storageProviderService, IAreaSetupProgressService areaSetupProgressService, ISafetyScoreCalculator safetyScoreCalculator, IFastStorageRepositoryBase<MapElement> mapElementRepository, IFastStorageRepositoryBase<SafetyScoreElement> safetyScoreElementRepository)
+        public OSMDataParsingService(
+            IRepository<Area, Guid> areaRepository, IStorageProviderService storageProviderService, IAreaSetupProgressService areaSetupProgressService,
+            ISafetyScoreCalculator safetyScoreCalculator, IMapElementRepository mapElementRepository, ISafetyScoreElementRepository safetyScoreElementRepository)
         {
             this.areaRepository = areaRepository;
             this.storageProviderService = storageProviderService;
@@ -116,14 +118,14 @@ namespace SafePath.Services
             //we need to map them all to its associated Edge and vertex
             //values in routerDb, to later use it to map the route weight correctly
             var elements = findTask.Result;
-            var itineroMapTask = Task.Run(() => MapElementsToItinero(routerDb, elements, areaId));
+            MapElementsToItinero(routerDb, elements, areaId);
 
             //in parallel, we calculate the safety score for every element
             var safetyScoreTask = Task.Run(() => CalculateSafetyScore(areaId, elements));
 
             var createMaplibreLayerTask = CreateMapLibreDataLayer(areaId, elements, areaBaseKeys.Append(MapLibreLayerFileName));
 
-            await Task.WhenAll(new[] { itineroMapTask, safetyScoreTask, createMaplibreLayerTask });
+            await Task.WhenAll(new[] { safetyScoreTask, createMaplibreLayerTask });
 
             //everything is done. we mark the area as completed
             areaSetupProgressService.MarkStepCompleted(areaId, AreaSetupProgress.Completed);
@@ -240,10 +242,14 @@ namespace SafePath.Services
 
                 //checks if there are already information for this place
                 var safetyInfo = safetyInfoList.FirstOrDefault(s => s.EdgeId == element.EdgeId.Value);
-                safetyInfo ??= new SafetyScoreElement
+                if (safetyInfo == null)
                 {
-                    EdgeId = element.EdgeId.Value,
-                };
+                    safetyInfo = new SafetyScoreElement
+                    {
+                        EdgeId = element.EdgeId.Value,
+                    };
+                    safetyInfoList.Add(safetyInfo);
+                }
                 safetyInfo.MapElements.Add(element);
             }
 
@@ -251,7 +257,6 @@ namespace SafePath.Services
             //for every one
             Parallel.ForEach(safetyInfoList, si => si.Score = safetyScoreCalculator.Calculate(si.MapElements));
 
-            // Asynchronous I/O-bound operations
             await Task.WhenAll(
                 mapElementRepository.InsertManyAsync(elements),
                 safetyScoreElementRepository.InsertManyAsync(safetyInfoList)

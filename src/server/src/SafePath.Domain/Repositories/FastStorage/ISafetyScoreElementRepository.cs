@@ -7,5 +7,4 @@ namespace SafePath.Repositories.FastStorage
         float? GetScoreByEdgeId(uint edgeId);
 
     }
-
 }

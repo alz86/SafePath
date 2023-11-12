@@ -10,5 +10,10 @@ public class SafePathDbContextFactory : DbContextFactoryBase<SafePathDbContext>
 
     protected override string ConnectionStringName => "Default";
 
-    protected override SafePathDbContext BuildContext(DbContextOptions<SafePathDbContext> options) => new SafePathDbContext(options);
+    protected override SafePathDbContext ConfigureDbContext(string connectionString)
+    {
+        var builder = new DbContextOptionsBuilder<SafePathDbContext>().UseSqlServer(connectionString);
+
+        return new SafePathDbContext(builder.Options);
+    }
 }

@@ -7,23 +7,20 @@ using Volo.Abp.EntityFrameworkCore;
 namespace SafePath.EntityFrameworkCore;
 
 public abstract class DbContextFactoryBase<T> : IDesignTimeDbContextFactory<T>
-    where T : AbpDbContext<T>
+    where T : DbContext
 {
+    protected abstract string ConnectionStringName { get; }
+
     public T CreateDbContext(string[] args)
     {
         SafePathEfCoreEntityExtensionMappings.Configure();
 
         var configuration = BuildConfiguration();
 
-        var builder = new DbContextOptionsBuilder<T>()
-            .UseSqlServer(configuration.GetConnectionString(ConnectionStringName));
-
-        return BuildContext(builder.Options);
+        return ConfigureDbContext(configuration.GetConnectionString(ConnectionStringName)!);
     }
-
-    protected abstract string ConnectionStringName { get; }
-
-    protected abstract T BuildContext(DbContextOptions<T> options);
+    
+    protected abstract T ConfigureDbContext(string connectionString);
 
     private static IConfigurationRoot BuildConfiguration()
     {

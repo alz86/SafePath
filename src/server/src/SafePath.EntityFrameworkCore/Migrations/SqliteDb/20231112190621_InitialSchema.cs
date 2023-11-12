@@ -2,10 +2,10 @@
 
 #nullable disable
 
-namespace SafePath.Migrations.FastStorage
+namespace SafePath.Migrations.SqliteDb
 {
     /// <inheritdoc />
-    public partial class InitialMigrationSqlite : Migration
+    public partial class InitialSchema : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -14,14 +14,15 @@ namespace SafePath.Migrations.FastStorage
                 name: "MapElement",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    Lat = table.Column<double>(type: "float", nullable: false),
-                    Lng = table.Column<double>(type: "float", nullable: false),
-                    OSMNodeId = table.Column<long>(type: "bigint", nullable: true),
-                    EdgeId = table.Column<long>(type: "bigint", nullable: true),
-                    VertexId = table.Column<long>(type: "bigint", nullable: true),
-                    ItineroMappingError = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true)
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    Lat = table.Column<double>(type: "REAL", nullable: false),
+                    Lng = table.Column<double>(type: "REAL", nullable: false),
+                    OSMNodeId = table.Column<long>(type: "INTEGER", nullable: true),
+                    EdgeId = table.Column<uint>(type: "INTEGER", nullable: true),
+                    VertexId = table.Column<uint>(type: "INTEGER", nullable: true),
+                    ItineroMappingError = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
+                    Type = table.Column<int>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -32,9 +33,10 @@ namespace SafePath.Migrations.FastStorage
                 name: "SafetyScoreElement",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    Score = table.Column<float>(type: "real", nullable: false)
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    Score = table.Column<float>(type: "REAL", nullable: false),
+                    EdgeId = table.Column<uint>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -45,8 +47,8 @@ namespace SafePath.Migrations.FastStorage
                 name: "SafetyScoreElementMapElement",
                 columns: table => new
                 {
-                    SafetyScoreElementId = table.Column<int>(type: "int", nullable: false),
-                    MapElementId = table.Column<int>(type: "int", nullable: false)
+                    SafetyScoreElementId = table.Column<int>(type: "INTEGER", nullable: false),
+                    MapElementId = table.Column<int>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -64,6 +66,17 @@ namespace SafePath.Migrations.FastStorage
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_MapElement_Lat_Lng",
+                table: "MapElement",
+                columns: new[] { "Lat", "Lng" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SafetyScoreElement_EdgeId",
+                table: "SafetyScoreElement",
+                column: "EdgeId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_SafetyScoreElementMapElement_MapElementId",

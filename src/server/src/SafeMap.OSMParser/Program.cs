@@ -40,8 +40,8 @@ var areaRepository = application.Services.GetRequiredService<IRepository<Area, G
 var storageProviderService = application.Services.GetRequiredService<IStorageProviderService>();
 var areaSetupProgressService = application.Services.GetRequiredService<IAreaSetupProgressService>();
 var safetyScoreCalculator = application.Services.GetRequiredService<ISafetyScoreCalculator>();
-var mapElementRepository = application.Services.GetRequiredService<IFastStorageRepositoryBase<MapElement>>();
-var safetyScoreElementRepository = application.Services.GetRequiredService<IFastStorageRepositoryBase<SafetyScoreElement>>();
+var mapElementRepository = application.Services.GetRequiredService<IMapElementRepository>();
+var safetyScoreElementRepository = application.Services.GetRequiredService<ISafetyScoreElementRepository>();
 
 var s = new OSMDataParsingService(areaRepository, storageProviderService, areaSetupProgressService, safetyScoreCalculator, mapElementRepository, safetyScoreElementRepository);
 await s.Parse(Guid.NewGuid(), new[] { "..", "..", "..", "Data" });

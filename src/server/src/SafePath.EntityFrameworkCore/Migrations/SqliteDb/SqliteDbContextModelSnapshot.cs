@@ -2,60 +2,48 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SafePath.EntityFrameworkCore.FastStorage;
-using Volo.Abp.EntityFrameworkCore;
 
 #nullable disable
 
-namespace SafePath.Migrations.FastStorage
+namespace SafePath.Migrations.SqliteDb
 {
     [DbContext(typeof(SqliteDbContext))]
-    [Migration("20231109224740_IndexesAdded")]
-    partial class IndexesAdded
+    partial class SqliteDbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("_Abp_DatabaseProvider", EfCoreDatabaseProvider.SqlServer)
-                .HasAnnotation("ProductVersion", "7.0.13")
-                .HasAnnotation("Relational:MaxIdentifierLength", 128);
-
-            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+            modelBuilder.HasAnnotation("ProductVersion", "7.0.13");
 
             modelBuilder.Entity("SafePath.Entities.FastStorage.MapElement", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+                        .HasColumnType("INTEGER");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<long?>("EdgeId")
-                        .HasColumnType("bigint");
+                    b.Property<uint?>("EdgeId")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ItineroMappingError")
                         .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
+                        .HasColumnType("TEXT");
 
                     b.Property<double>("Lat")
-                        .HasColumnType("float");
+                        .HasColumnType("REAL");
 
                     b.Property<double>("Lng")
-                        .HasColumnType("float");
+                        .HasColumnType("REAL");
 
                     b.Property<long?>("OSMNodeId")
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Type")
-                        .HasColumnType("int");
+                        .HasColumnType("INTEGER");
 
-                    b.Property<long?>("VertexId")
-                        .HasColumnType("bigint");
+                    b.Property<uint?>("VertexId")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -68,15 +56,13 @@ namespace SafePath.Migrations.FastStorage
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+                        .HasColumnType("INTEGER");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<long>("EdgeId")
-                        .HasColumnType("bigint");
+                    b.Property<uint>("EdgeId")
+                        .HasColumnType("INTEGER");
 
                     b.Property<float>("Score")
-                        .HasColumnType("real");
+                        .HasColumnType("REAL");
 
                     b.HasKey("Id");
 
@@ -89,10 +75,10 @@ namespace SafePath.Migrations.FastStorage
             modelBuilder.Entity("SafePath.Entities.FastStorage.SafetyScoreElementMapElement", b =>
                 {
                     b.Property<int>("SafetyScoreElementId")
-                        .HasColumnType("int");
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("MapElementId")
-                        .HasColumnType("int");
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("SafetyScoreElementId", "MapElementId");
 

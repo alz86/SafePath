@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using Itinero.SafePath;
+using Microsoft.Extensions.DependencyInjection;
 using SafePath.Services;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -39,5 +40,6 @@ public class SafePathApplicationModule : AbpModule
 
         context.Services.AddSingleton<IStorageProviderService, HardDiskStorageProviderService>();
         context.Services.AddTransient<ISafetyScoreCalculator, SimpleSafetyScoreCalculator>();
+        context.Services.AddTransient<ISafetyScoreRepository, SafetyScoreRepository>();
     }
 }
