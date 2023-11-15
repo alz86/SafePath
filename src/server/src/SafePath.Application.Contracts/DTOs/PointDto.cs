@@ -10,5 +10,7 @@ namespace SafePath.DTOs
 
         [Required]
         public SecurityElementTypesDto Type { get; set; }
+
+        public int? MapElementId { get; set; }
     }
 }

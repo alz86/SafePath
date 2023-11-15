@@ -257,10 +257,8 @@ namespace SafePath.Services
             //for every one
             Parallel.ForEach(safetyInfoList, si => si.Score = safetyScoreCalculator.Calculate(si.MapElements));
 
-            await Task.WhenAll(
-                mapElementRepository.InsertManyAsync(elements),
-                safetyScoreElementRepository.InsertManyAsync(safetyInfoList)
-            );
+            mapElementRepository.InsertMany(elements);
+            safetyScoreElementRepository.InsertMany(safetyInfoList);
             await safetyScoreElementRepository.SaveChangesAsync();
 
             areaSetupProgressService.MarkStepCompleted(areaId, AreaSetupProgress.CalculatingSecurityScore);

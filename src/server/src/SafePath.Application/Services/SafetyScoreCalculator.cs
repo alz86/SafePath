@@ -75,12 +75,30 @@ namespace SafePath.Services
                 case SecurityElementTypes.Semaphore:
                     rate = 1.05f;
                     break;
+
+                //crime report
+                case SecurityElementTypes.CrimeReport_Severity_1: 
+                    rate = 1.1f;
+                    break;
+                case SecurityElementTypes.CrimeReport_Severity_2:
+                    rate = 1.2f;
+                    break;
+                case SecurityElementTypes.CrimeReport_Severity_3:
+                    rate = 1.3f;
+                    break;
+                case SecurityElementTypes.CrimeReport_Severity_4:
+                    rate = 1.4f;
+                    break;
+                case SecurityElementTypes.CrimeReport_Severity_5:
+                    rate = 1.5f;
+                    break;
+
                 case SecurityElementTypes.Test_5_Points:
                     rate = 5;
                     break;
             }
 
-            //TODO: add context variation
+            //TODO: add context variations
             return rate;
         }
     }

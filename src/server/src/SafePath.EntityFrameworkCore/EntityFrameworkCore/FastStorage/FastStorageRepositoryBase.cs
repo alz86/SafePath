@@ -18,33 +18,33 @@ namespace SafePath.EntityFrameworkCore.FastStorage
 
         protected TDbContext DbContext { get; init; }
 
-        public async Task<TEntity> GetByIdAsync(object id) => await DbContext.Set<TEntity>().FindAsync(id);
+        public TEntity? GetById(object id) => DbContext.Set<TEntity>().Find(id);
 
-        public Task<List<TEntity>> GetAllAsync() => DbContext.Set<TEntity>().ToListAsync();
+        public List<TEntity> GetAll() => DbContext.Set<TEntity>().ToList();
 
-        public async Task InsertAsync(TEntity entity)
-        {
-            await DbContext.Set<TEntity>().AddAsync(entity);
-        }
+        public void Insert(TEntity entity) => DbContext.Set<TEntity>().Add(entity);
 
-        public async Task InsertManyAsync(IEnumerable<TEntity> elements)
+        public void InsertMany(IEnumerable<TEntity> elements)
         {
             if (elements == null || !elements.Any())
                 throw new ArgumentException("No elements provided to insert.", nameof(elements));
 
-            await DbContext.Set<TEntity>().AddRangeAsync(elements);
+            DbContext.Set<TEntity>().AddRange(elements);
         }
 
-        public void Update(TEntity entity)
+        public void Update(TEntity entity) => DbContext.Set<TEntity>().Update(entity);
+
+        public void Delete(TEntity entity) => DbContext.Set<TEntity>().Remove(entity);
+
+        public async Task<int> SaveChangesAsync()
         {
-            DbContext.Set<TEntity>().Update(entity);
-        }
+            var result = await DbContext.SaveChangesAsync();
 
-        public void Delete(TEntity entity)
-        {
-            DbContext.Set<TEntity>().Remove(entity);
+            //with this command we force the commit of the data from
+            //the .wal file to the main one.
+            await DbContext.Database.ExecuteSqlRawAsync("PRAGMA wal_checkpoint;");
+            
+            return result;
         }
-
-        public Task<int> SaveChangesAsync() => DbContext.SaveChangesAsync();
     }
 }

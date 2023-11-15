@@ -29,6 +29,9 @@ namespace SafePath.EntityFrameworkCore.FastStorage
 
             builder.Entity<MapElement>()
                 .HasIndex(m => new { m.Lat, m.Lng });
+            
+            builder.Entity<MapElement>()
+                    .HasIndex(m => m.EdgeId);
 
             //many-to-many relationship
             builder.Entity<SafetyScoreElement>()
@@ -46,10 +49,7 @@ namespace SafePath.EntityFrameworkCore.FastStorage
                 j =>
                 {
                     j.HasKey(t => new { t.SafetyScoreElementId, t.MapElementId });
-                    // Puedes configurar más detalles de la tabla de unión aquí si es necesario
                 });
-
-
         }
 
 

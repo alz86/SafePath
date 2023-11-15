@@ -22,6 +22,13 @@ public partial class Index
     public IAreaService AreaService { get; set; }
 
     /// <summary>
+    /// Service to access services related to
+    /// Area data. 
+    /// </summary>
+    public IAreaDataService AreaDataService { get; set; }
+
+
+    /// <summary>
     /// List of areas the current user can administrate.
     /// </summary>
     /// <remarks>
@@ -102,7 +109,7 @@ public partial class Index
         using (var stream = new StreamReader(csvFile.OpenReadStream()))
             fileContent = await stream.ReadToEndAsync();
 
-        var resp = await AreaService.UploadCrimeReportCSV(fileContent);
+        var resp = await AreaDataService.UploadCrimeReportCSV(SelectedArea.Id, fileContent);
         if (!resp.Success)
         {
             //TODO: add validation errors to the UI
