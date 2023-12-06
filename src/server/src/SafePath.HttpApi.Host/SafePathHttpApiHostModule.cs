@@ -45,7 +45,7 @@ namespace SafePath;
     typeof(AbpAspNetCoreMultiTenancyModule),
     typeof(SafePathApplicationModule),
     typeof(SafePathEntityFrameworkCoreModule),
-    typeof(AbpAspNetCoreMvcUiModule),
+    typeof(AbpAspNetCoreMvcUiLeptonXLiteThemeModule),
     typeof(AbpAccountWebOpenIddictModule),
     typeof(AbpAspNetCoreSerilogModule),
     typeof(AbpSwashbuckleModule)

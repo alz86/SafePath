@@ -14,18 +14,30 @@ namespace SafePath.Blazor.Pages.Admin;
 
 public partial class Index
 {
-    public IUiMessageService UIMessageService { get; set; }
+    private readonly IUiMessageService uiMessageService;
 
     /// <summary>
     /// Service to access the Area API. 
     /// </summary>
-    public IAreaService AreaService { get; set; }
+    private readonly IAreaService areaService;
 
     /// <summary>
     /// Service to access services related to
     /// Area data. 
     /// </summary>
-    public IAreaDataService AreaDataService { get; set; }
+    private readonly IAreaDataService areaDataService;
+    private readonly IClientDataValidator clientDataValidator;
+
+    private IBrowserFile? csvFile;
+    private bool mapLibreInitCalled = false;
+
+    public Index(IUiMessageService uiMessageService, IAreaService areaService, IAreaDataService areaDataService, IClientDataValidator clientDataValidator)
+    {
+        this.uiMessageService = uiMessageService;
+        this.areaService = areaService;
+        this.areaDataService = areaDataService;
+        this.clientDataValidator = clientDataValidator;
+    }
 
 
     /// <summary>
@@ -42,12 +54,13 @@ public partial class Index
     /// </summary>
     protected AreaDto? SelectedArea { get; set; }
 
-    protected GeoJsonFeatureCollection SecurityElements { get; set; }
+    protected GeoJsonFeatureCollection? SecurityElements { get; set; }
 
+    protected bool ShowLoading { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        var areas = await AreaService.GetAdminAreas();
+        var areas = await areaService.GetAdminAreas();
 
         if (areas.Count == 0) //in theory it will never happen
             throw new AbpException("User is not allowed to access the Area admin page");
@@ -60,12 +73,25 @@ public partial class Index
 
         SelectedArea = areas[0];
 
-        await JSRuntime.InvokeVoidAsync("waitForMapLibre", SelectedArea.InitialLatitude, SelectedArea.InitialLongitude, SecurityElements);
+        await JSRuntime.InvokeAsync<IJSObjectReference>("import", "/maplibre/maplibre-gl-dev-3.6.2.js");
+        await JSRuntime.InvokeAsync<IJSObjectReference>("import", "/Pages/Admin/Index.razor.js");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+
+        if (!mapLibreInitCalled && SelectedArea != null)
+        {
+            await JSRuntime.InvokeVoidAsync("waitForMapLibre", SelectedArea!.InitialLatitude, SelectedArea.InitialLongitude, SecurityElements);
+            mapLibreInitCalled = true;
+        }
     }
 
     private async Task OnAreaSelected(ChangeEventArgs e)
     {
         var selectedAreaId = e.Value!.ToString();
+
         SelectedArea = Areas!.First(area => area.Id.ToString() == selectedAreaId);
 
         // Here, you can update the map with new coordinates based on the selected Area.
@@ -75,52 +101,53 @@ public partial class Index
     private async Task ToggleLayer(string layerType)
     {
         // If we haven't already fetched the SecurityElements, fetch them
-        bool sendSecurityElements = false;
+        bool securityElementsSent = false;
         if (SecurityElements == null)
         {
-            await JSRuntime.InvokeVoidAsync("showLoadingOverlay");
-            SecurityElements = await AreaService.GetSecurityLayerGeoJSON();
-            sendSecurityElements = true;
-            await JSRuntime.InvokeVoidAsync("hideLoadingOverlay");
+            ShowLoading = true;
+            try
+            {
+                SecurityElements = await areaService.GetSecurityLayerGeoJSON();
+                securityElementsSent = true;
+            }
+            finally
+            {
+                ShowLoading = false;
+            }
         }
 
         // Send the data to JavaScript to either create or toggle the visibility of the layer
-        await JSRuntime.InvokeVoidAsync("showElements", layerType, sendSecurityElements ? SecurityElements : null);
+        await JSRuntime.InvokeVoidAsync("showElements", layerType, securityElementsSent ? SecurityElements : null);
     }
-
-
-    private IBrowserFile? csvFile;
 
     private void LoadFiles(InputFileChangeEventArgs e)
     {
-        csvFile = e.GetMultipleFiles()?.FirstOrDefault();
+        csvFile = e.File;
     }
 
     private async Task UploadFile()
     {
-        if (csvFile == null || csvFile.Size == 0)
+        if (csvFile == null)
             throw new UserFriendlyException("There is not file selected to upload.");
         else if (csvFile.Size == 0)
             throw new UserFriendlyException("The selected file is empty.");
         else if (csvFile.Size > Constants.MaxCsvFileSize)
             throw new UserFriendlyException("The selected file to upload is too big. The maximum size allowed is 50MB.");
 
-        string fileContent;
-        using (var stream = new StreamReader(csvFile.OpenReadStream()))
-            fileContent = await stream.ReadToEndAsync();
+        ShowLoading = true;
+        try
+        {
+            string fileContent;
+            using (var stream = new StreamReader(csvFile.OpenReadStream()))
+                fileContent = await stream.ReadToEndAsync();
 
-        var resp = await AreaDataService.UploadCrimeReportCSV(SelectedArea.Id, fileContent);
-        if (!resp.Success)
-        {
-            //TODO: add validation errors to the UI
-            var errorMessage = resp.ValidationErrors?.Count > 0
-                ? "The selected file contains errors. Please fix them and try again."
-                : "An error occurred while uploading the file. Please try again later.";
-            throw new UserFriendlyException(errorMessage);
+            await clientDataValidator.ValidateCrimeReportCSVFile(fileContent);
+            await areaDataService.UploadCrimeReportCSV(SelectedArea!.Id, fileContent);
+            await uiMessageService.Success("The file was uploaded successfully.");
         }
-        else
+        finally
         {
-            await UIMessageService.Success("The file was uploaded successfully.");
+            ShowLoading = false;
         }
     }
 }

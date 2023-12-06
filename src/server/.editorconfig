@@ -2,3 +2,6 @@ root = true
 
 [*]
 end_of_line = lf
+
+[*.{cs,vb}]
+dotnet_diagnostic.IDE0290.severity = none

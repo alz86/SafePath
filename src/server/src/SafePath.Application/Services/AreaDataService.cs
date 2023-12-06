@@ -1,18 +1,12 @@
-﻿using CsvHelper;
-using CsvHelper.Configuration;
-using SafePath.Classes;
+﻿using SafePath.Classes;
 using SafePath.DTOs;
 using SafePath.Entities;
 using SafePath.Entities.FastStorage;
 using SafePath.Repositories.FastStorage;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
 using System.Linq;
-using System.Net.Http.Headers;
 using System.Threading.Tasks;
-using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 
 namespace SafePath.Services
@@ -25,8 +19,9 @@ namespace SafePath.Services
         private readonly ISafetyScoreCalculator safetyScoreCalculator;
         private readonly IRepository<CrimeDataUploading, Guid> crimeDataUploadingRepository;
         private readonly IRepository<CrimeDataUploadingEntry, Guid> crimeDataUploadingEntryRepository;
+        private readonly IDataValidator dataValidator;
 
-        public AreaDataService(IMapElementRepository mapElementRepository, IItineroProxy itineroProxy, ISafetyScoreElementRepository safetyScoreElementRepository, ISafetyScoreCalculator safetyScoreCalculator, IRepository<CrimeDataUploading, Guid> crimeDataUploadingRepository, IRepository<CrimeDataUploadingEntry, Guid> crimeDataUploadingEntryRepository, IItineroProxy proxy)
+        public AreaDataService(IMapElementRepository mapElementRepository, IItineroProxy itineroProxy, ISafetyScoreElementRepository safetyScoreElementRepository, ISafetyScoreCalculator safetyScoreCalculator, IRepository<CrimeDataUploading, Guid> crimeDataUploadingRepository, IRepository<CrimeDataUploadingEntry, Guid> crimeDataUploadingEntryRepository, IItineroProxy proxy, IDataValidator dataValidator)
         {
             this.itineroProxy = itineroProxy;
             this.mapElementRepository = mapElementRepository;
@@ -34,6 +29,7 @@ namespace SafePath.Services
             this.safetyScoreCalculator = safetyScoreCalculator;
             this.crimeDataUploadingRepository = crimeDataUploadingRepository;
             this.crimeDataUploadingEntryRepository = crimeDataUploadingEntryRepository;
+            this.dataValidator = dataValidator;
         }
         public async Task UpdatePoint(Guid areaId, PointDto point)
         {
@@ -53,8 +49,6 @@ namespace SafePath.Services
         protected void UpdatePointInternal(Guid areaId, int? elementId, float lat, float lng, SecurityElementTypes elementType)
         {
             //currently the AreaId is not used.
-
-
             var scoresToRecalculate = new List<SafetyScoreElement>();
             bool mustAdd = false, mustRecalculate = false;
 
@@ -62,6 +56,8 @@ namespace SafePath.Services
             if (existingElement == null)
             {
                 //TODO: add error handling
+                //TODO: prior asking to itinero for the coordinate info, check if it is
+                //not already resolved and stored in the Sqlite db
                 var itineroPoint = itineroProxy.GetItineroEdgeIds(lat, lng);
                 if (itineroPoint.Error) return;
 
@@ -135,7 +131,7 @@ namespace SafePath.Services
                 {
                     EdgeId = existingElement.EdgeId!.Value
                 };
-                safetyInfo.MapElements.Add(existingElement);
+                //safetyInfo.MapElements.Add(existingElement);
                 mustAdd = mustRecalculate = true;
             }
 
@@ -152,6 +148,9 @@ namespace SafePath.Services
 
             //if some other elements were also marked to be recalculated.
             //then we go through them calculating the new score
+            //TODO: this list should be returned and all the elements recalculated
+            //together, since chances are that the same element need to be recalculated by
+            //changes on different points
             foreach (var score in scoresToRecalculate)
             {
                 var newScore = safetyScoreCalculator.Calculate(score.MapElements);
@@ -163,27 +162,15 @@ namespace SafePath.Services
             }
         }
 
+
+
         /// <summary>
         /// <inheritdoc />
         /// </summary>
-        public async Task<CrimeUploadingResultDto> UploadCrimeReportCSV(Guid areaId, string fileContent)
+        public async Task UploadCrimeReportCSV(Guid areaId, string fileContent)
         {
-            if (string.IsNullOrWhiteSpace(fileContent))
-                throw new UserFriendlyException("The selected file to upload is empty.");
-
-            if (fileContent.Length > Constants.MaxCsvFileSize)
-                throw new UserFriendlyException("The selected file to upload is too big. The maximum size allowed is 50MB.");
-
-            var entries = ReadCrimeData(fileContent);
-
-            var validationResult = ValidateCrimeEntries(entries);
-
-            if (validationResult.Count > 0)
-            {
-                //there are errors, the import is not done.
-                return new CrimeUploadingResultDto { Success = false, ValidationErrors = validationResult };
-            }
-
+            await dataValidator.ValidateCrimeReportCSVFile(fileContent, out IList<CrimeEntry> entries);
+            
             //data is valid, let's save it in the DB.
             var uploadingEntity = new CrimeDataUploading { RawData = fileContent, TenantId = CurrentTenant!.Id };
             uploadingEntity = await crimeDataUploadingRepository.InsertAsync(uploadingEntity);
@@ -199,8 +186,6 @@ namespace SafePath.Services
 
             //TODO: regenerate safety info
             await UpdateSafetyDB(areaId, dbEntries);
-
-            return new CrimeUploadingResultDto { Success = true };
         }
 
         private Task UpdateSafetyDB(Guid areaId, IEnumerable<CrimeDataUploadingEntry> dbEntries)
@@ -280,51 +265,6 @@ namespace SafePath.Services
         }
 
 
-
-
-        /// <summary>
-        /// Validates a list of <see cref="CrimeEntry"/> entities, checking
-        /// if they are valid entries to be processed.
-        /// </summary>
-        private IDictionary<int, CrimeEntryValidationResult> ValidateCrimeEntries(IList<CrimeEntry> entries)
-        {
-            var results = new Dictionary<int, CrimeEntryValidationResult>();
-            for (int i = 0; i < entries.Count; i++)
-            {
-                CrimeEntry entry = entries[i];
-                CrimeEntryValidationResult? result = null;
-                if (entry.Latitude == 0 || entry.Longitude == 0)
-                {
-                    result = CrimeEntryValidationResult.InvalidAddress;
-                }
-
-                var edge = itineroProxy.GetItineroEdgeIds(entry.Latitude, entry.Longitude);
-                if (edge.Error)
-                {
-                    result = CrimeEntryValidationResult.InvalidAddress;
-                }
-
-                if (entry.Severity < 1 || entry.Severity > 5)
-                {
-                    result = CrimeEntryValidationResult.InvalidSeverity;
-                }
-
-                if (result != null)
-                    results.Add(i, result.Value);
-            }
-
-            return results;
-        }
-
-        /// <summary>
-        /// Reads the content on the supplied CSV and parses to a list
-        /// of <see cref="CrimeEntry"/> entities.
-        /// </summary>
-        private static IList<CrimeEntry> ReadCrimeData(string fileContent)
-        {
-            using var reader = new StringReader(fileContent);
-            using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
-            return csv.GetRecords<CrimeEntry>().ToList();
-        }
+        
     }
 }

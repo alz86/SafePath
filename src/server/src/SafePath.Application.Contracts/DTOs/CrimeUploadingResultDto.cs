@@ -2,6 +2,7 @@
 
 namespace SafePath.DTOs
 {
+    //TODO: no longer in use
     public class CrimeUploadingResultDto
     {
         public bool Success { get; set; }

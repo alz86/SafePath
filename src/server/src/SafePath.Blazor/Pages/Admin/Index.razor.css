@@ -1,1 +1,36 @@
-/* Write here your styles for the Index page */
+.loading-overlay {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.8);
+    z-index: 9999;
+    text-align: center;
+    padding-top: 20%;
+}
+
+/* Pressed button state */
+.pressed {
+    background-color: #5632a4; /* a darker blue */
+}
+
+.btn-list .fas {
+    width: 18px;
+    display: inline-block;
+}
+
+.btn-list .btn {
+    text-align: start;
+    padding: 9px;
+    width: 190px;
+}
+
+.container.buttons .btn {
+    padding: 15px;
+}
+
+.btn-list hr {
+    margin: 0.8em;
+}

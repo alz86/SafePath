@@ -5,105 +5,48 @@
 @using Volo.Abp.MultiTenancy
 @inject IJSRuntime JSRuntime
 
-@attribute [Authorize]
-
-<!-- Include MapLibre CSS -->
 <link href="/maplibre/maplibre-3.3.1.css" rel="stylesheet" />
-
-<!-- Include MapLibre JS -->
-<script src="/maplibre/maplibre-3.3.1.js"></script>
-
-<!-- Page's javascript code -->
-<script src="scripts/admin/index.js" defer> </script>
-
-<style>
-    .loading-overlay {
-        display: none;
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(255, 255, 255, 0.8);
-        z-index: 9999;
-        text-align: center;
-        padding-top: 20%;
-    }
-
-    /* Pressed button state */
-    .pressed {
-        background-color: #5632a4; /* a darker blue */
-    }
-
-    .btn-list .fas {
-        width: 18px;
-        display: inline-block;
-    }
-
-    .btn-list button {
-        text-align: left;
-        padding: 9px;
-        width: 190px;
-    }
-
-    .container.buttons .btn {
-        padding: 15px;
-    }
-</style>
 
 <!-- Title -->
 <div class="container text-center">
     <h1>@SelectedArea?.DisplayName Dashboard</h1>
 </div>
 
-@if (Areas?.Any() == true)
-{
-    <div>
-        <label for="areaSelect">Select Area:</label>
-        <select id="areaSelect" @onchange="OnAreaSelected">
-            @foreach (var area in Areas)
-            {
-                <option value="@area.Id">@area.DisplayName</option>
-            }
-        </select>
-    </div>
-}
-
 <!-- Map -->
 <div class="container text-center" style="display: flex;">
-
-    <div id="loadingOverlay" class="loading-overlay">
-        <span>Loading security elements from the server...</span>
-    </div>
 
     <!-- Map -->
     <div id="map" style="flex: 6; height: 550px;"></div>
 
     <!-- Vertical Button Bar -->
     <div class="btn-list" style="flex: 1; padding-left: 15px; display: flex; flex-direction: column;">
-        <button @onclick='() => ToggleLayer("StreetLamp")' id="btn-StreetLamp" class="btn btn-secondary mb-2">
+        <button @onclick='() => ToggleLayer("StreetLamp")' id="btn-StreetLamp" class="btn btn-primary mb-2">
             <i class="fas fa-lightbulb"></i>&nbsp;|&nbsp;&nbsp;Street Lamp
         </button>
-        <button @onclick='() => ToggleLayer("CCTV")' id="btn-CCTV" class="btn btn-secondary mb-2">
+        <button @onclick='() => ToggleLayer("CCTV")' id="btn-CCTV" class="btn btn-primary mb-2">
             <i class="fas fa-video"></i>&nbsp;|&nbsp;&nbsp;CCTV
         </button>
-        <button @onclick='() => ToggleLayer("BusStation")' id="btn-BusStation" class="btn btn-secondary mb-2">
+        <button @onclick='() => ToggleLayer("BusStation")' id="btn-BusStation" class="btn btn-primary mb-2">
             <i class="fas fa-bus"></i>&nbsp;|&nbsp;&nbsp;Bus Station
         </button>
-        <button @onclick='() => ToggleLayer("RailwayStation")' id="btn-RailwayStation" class="btn btn-secondary mb-2">
+        <button @onclick='() => ToggleLayer("RailwayStation")' id="btn-RailwayStation" class="btn btn-primary mb-2">
             <i class="fas fa-train"></i>&nbsp;|&nbsp;&nbsp;Railway
         </button>
-        <button @onclick='() => ToggleLayer("PoliceStation")' id="btn-PoliceStation" class="btn btn-secondary mb-2">
+        <button @onclick='() => ToggleLayer("PoliceStation")' id="btn-PoliceStation" class="btn btn-primary mb-2">
             <i class="fas fa-shield-alt"></i>&nbsp;|&nbsp;&nbsp;Police Station
         </button>
-        <button @onclick='() => ToggleLayer("Hospital")' id="btn-Hospital" class="btn btn-secondary mb-2">
+        <button @onclick='() => ToggleLayer("Hospital")' id="btn-Hospital" class="btn btn-primary mb-2">
             <i class="fas fa-hospital"></i>&nbsp;|&nbsp;&nbsp;Hospital
         </button>
-        <button @onclick='() => ToggleLayer("Semaphore")' id="btn-Semaphore" class="btn btn-secondary mb-2">
+        <button @onclick='() => ToggleLayer("Semaphore")' id="btn-Semaphore" class="btn btn-primary mb-2">
             <i class="fas fa-traffic-light"></i>&nbsp;|&nbsp;&nbsp;Semaphore
         </button>
         <hr />
-        <button @onclick="() => {}" class="btn btn-secondary  mb-2">
+        <button onclick='AddNewElement()' id="btn-Semaphore" class="btn btn-primary mb-2">
+            <i class="fas fa-plus"></i>&nbsp;|&nbsp;&nbsp;Add new
+        </button>
+        <hr />
+        <button @onclick="() => {}" class="btn btn-primary  mb-2">
             <i class="fas fa-database"></i>&nbsp;|&nbsp;&nbsp;Bulk Data Update
         </button>
         <button @onclick="() => {}" class="btn btn-danger">

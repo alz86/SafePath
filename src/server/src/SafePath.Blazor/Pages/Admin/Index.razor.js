@@ -1,5 +1,8 @@
-﻿var maptilerUrl = 'https://api.maptiler.com/maps/bright-v2/style.json?key=QiGGk1CncSXRVkYHht7u';
+﻿//TODO: move as much code as possible to .net
 
+var maptilerUrl = 'https://api.maptiler.com/maps/bright-v2/style.json?key=QiGGk1CncSXRVkYHht7u';
+
+//TODO: remove
 window.showLoadingOverlay = () => changeLoadingOverlayVisibility('block');
 window.hideLoadingOverlay = () => changeLoadingOverlayVisibility('none');
 
@@ -50,6 +53,16 @@ window.showElements = function (layerType, elements) {
     toggleButtonState("btn-" + layerType);
 };
 
+function AddNewElement() {
+    $('#fileUploadModal').modal('show');
+}
+
+function UploadFile2() {
+    $('#fileUploadModal').modal('hide');
+    showLoadingOverlay();
+    window.setTimeout(function () { hideLoadingOverlay() }, 3000);
+}
+
 function toggleButtonState(buttonId) {
     var btn = document.getElementById(buttonId);
     btn.classList.toggle('pressed');
@@ -96,13 +109,13 @@ function initMapLibre(mapElementId, initLat, initLong) {
         // Create a list of icons to load
         var baseFolder = '/images/icons/';
         const icons = [
-            'Hospital',
-            'StreetLamp',
-            'CCTV',
-            'BusStation',
-            'RailWayStation',
-            'Semaphore',
-            'PoliceStation'
+                'Hospital',
+                'StreetLamp',
+                'CCTV',
+                'BusStation',
+                'RailWayStation',
+                'Semaphore',
+                'PoliceStation'
         ];
 
         // Loads all icons, then adds them to the map
@@ -226,4 +239,4 @@ function filterLayers() {
             map.setLayoutProperty(layer.id, 'visibility', 'none');
         }
     }
-};
+};  
