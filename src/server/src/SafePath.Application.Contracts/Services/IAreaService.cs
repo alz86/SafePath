@@ -23,13 +23,14 @@ namespace SafePath.Services
         /// hospital, bus stops, etc.) associated to the system's 
         /// default area.
         /// </summary>
-        Task<IList<MapSecurityElementDto>> GetSecurityElements();
+        Task<IList<MapSecurityElementDto>> GetSecurityElements(Guid areaId);
 
         /// <summary>
         /// Gets the GeoJSON representation of an extra layer drawn over
         /// system's maps to show the different security elements mapped.
         /// </summary>
-        Task<GeoJsonFeatureCollection> GetSecurityLayerGeoJSON();
+        Task<GeoJsonFeatureCollection> GetSecurityLayerGeoJSON(Guid areaId);
 
+        Task ClearSecurityInfoCache(Guid areaId);
     }
 }

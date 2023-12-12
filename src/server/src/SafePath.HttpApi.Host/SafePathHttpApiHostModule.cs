@@ -283,7 +283,7 @@ public partial class SafePathHttpApiHostModule : AbpModule
 
             //TODO: Ugly code, but soon we will no longer use files except for Itinero database and all this will be refactored.
             var areaBaseKeys = new[] { "Resources", area.Id.ToString() };
-            await itineroProxy.Init(areaBaseKeys);
+            itineroProxy.Init(areaBaseKeys);
         }
     }
 }

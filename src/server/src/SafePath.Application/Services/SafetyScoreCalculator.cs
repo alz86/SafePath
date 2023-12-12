@@ -13,11 +13,19 @@ namespace SafePath.Services
     {
         public float Calculate(IEnumerable<MapElement> elements)
         {
-            if (elements?.Any() != true) return 0;
+            if (elements?.Any() != true) return 1;
 
             var score = 0f;
+            //var processedTypes = new List<SecurityElementTypes>(elements.Count());
+
             foreach (var element in elements)
             {
+                //check to avoid processing duplicated entries
+                /*
+                if (processedTypes.Contains(element.Type)) continue;
+                processedTypes.Add(element.Type);
+                */
+
                 var elementScore = GetSecurityScoreByType(element.Type);
                 //TODO: complete radiance
                 /*
@@ -36,11 +44,11 @@ namespace SafePath.Services
                     }
                 }
                 */
-                if (elementScore > score)
-                {
-                    score = elementScore;
-                }
+                score += elementScore;
             }
+
+            score /= elements.Count();
+
             return score;
         }
 
@@ -77,24 +85,24 @@ namespace SafePath.Services
                     break;
 
                 //crime report
-                case SecurityElementTypes.CrimeReport_Severity_1: 
-                    rate = 1.1f;
+                case SecurityElementTypes.CrimeReport_Severity_1:
+                    rate = 0.7f;
                     break;
                 case SecurityElementTypes.CrimeReport_Severity_2:
-                    rate = 1.2f;
+                    rate = 0.3f;
                     break;
                 case SecurityElementTypes.CrimeReport_Severity_3:
-                    rate = 1.3f;
+                    rate = -0.2f;
                     break;
                 case SecurityElementTypes.CrimeReport_Severity_4:
-                    rate = 1.4f;
+                    rate = -0.5f;
                     break;
                 case SecurityElementTypes.CrimeReport_Severity_5:
-                    rate = 1.5f;
+                    rate = -1f;
                     break;
 
                 case SecurityElementTypes.Test_5_Points:
-                    rate = 5;
+                    rate = -5;
                     break;
             }
 
@@ -102,5 +110,4 @@ namespace SafePath.Services
             return rate;
         }
     }
-
 }

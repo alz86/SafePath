@@ -2,7 +2,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SafePath.Services;
 using System.Threading.Tasks;
-using Volo.Abp;
 using Volo.Abp.Account;
 using Volo.Abp.AutoMapper;
 using Volo.Abp.BackgroundJobs;
@@ -11,7 +10,6 @@ using Volo.Abp.Identity;
 using Volo.Abp.Modularity;
 using Volo.Abp.PermissionManagement;
 using Volo.Abp.SettingManagement;
-using Volo.Abp.Settings;
 using Volo.Abp.TenantManagement;
 
 namespace SafePath;
@@ -41,5 +39,9 @@ public class SafePathApplicationModule : AbpModule
         context.Services.AddSingleton<IStorageProviderService, HardDiskStorageProviderService>();
         context.Services.AddTransient<ISafetyScoreCalculator, SimpleSafetyScoreCalculator>();
         context.Services.AddTransient<ISafetyScoreRepository, SafetyScoreRepository>();
+        context.Services.AddTransient<IClientDataValidator, ClientDataValidator>();
+        context.Services.AddTransient<IDataValidator, DataValidator>();
+        context.Services.AddTransient<IMaplibreLayerService, MaplibreLayerService>();
+        context.Services.AddTransient<ISafetyScoreChangeTrackerFactory, SafetyScoreChangeTrackerFactory>();
     }
 }

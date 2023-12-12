@@ -2,10 +2,13 @@
 @inherits SafePathComponentBase
 
 @using Microsoft.AspNetCore.Authorization
+@using SafePath.Blazor.Components
 @using Volo.Abp.MultiTenancy
 @inject IJSRuntime JSRuntime
 
-<link href="/maplibre/maplibre-3.3.1.css" rel="stylesheet" />
+<LoadingOverlay Show="ShowLoading" />
+
+<link href="/maplibre/maplibre-gl-3.6.2.css" rel="stylesheet" />
 
 <!-- Title -->
 <div class="container text-center">
@@ -13,13 +16,13 @@
 </div>
 
 <!-- Map -->
-<div class="container text-center" style="display: flex;">
+<div class="container-fluid row">
 
-    <!-- Map -->
-    <div id="map" style="flex: 6; height: 550px;"></div>
+    <!-- Map display -->
+    <div id="map" class="col-10" style="max-height: 600px"></div>
 
     <!-- Vertical Button Bar -->
-    <div class="btn-list" style="flex: 1; padding-left: 15px; display: flex; flex-direction: column;">
+    <div class="btn-list col-2 ps-3">
         <button @onclick='() => ToggleLayer("StreetLamp")' id="btn-StreetLamp" class="btn btn-primary mb-2">
             <i class="fas fa-lightbulb"></i>&nbsp;|&nbsp;&nbsp;Street Lamp
         </button>
@@ -46,10 +49,10 @@
             <i class="fas fa-plus"></i>&nbsp;|&nbsp;&nbsp;Add new
         </button>
         <hr />
-        <button @onclick="() => {}" class="btn btn-primary  mb-2">
+        <button @onclick="() => ShowBulkDataDialog = true" class="btn btn-primary  mb-2">
             <i class="fas fa-database"></i>&nbsp;|&nbsp;&nbsp;Bulk Data Update
         </button>
-        <button @onclick="() => {}" class="btn btn-danger">
+        <button @onclick="() => ShowCrimeDataDialog = true" class="btn btn-danger">
             <i class="fas fa-exclamation-triangle"></i>&nbsp;|&nbsp;
             Update Crime Data
         </button>
@@ -57,20 +60,11 @@
 </div>
 
 <!-- CSV file uploading -->
-<div class="modal" tabindex="-1" id="fileUploadModal">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">File Upload</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <InputFile OnChange="@LoadFiles" />
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-primary" @onclick="UploadFile">Upload</button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
+<GenericModal Title="Crime data uploading" AcceptText="Upload"
+              Show="ShowCrimeDataDialog" OnClose="HandleCrimeDataClosing">
+    <InputFile OnChange="@OnFileSelected" />
+</GenericModal>
+<GenericModal Title="Crime data uploading" AcceptText="Uplaod"
+              Show="ShowBulkDataDialog" OnClose="HandleBulkDataClosing">
+    <InputFile OnChange="@OnFileSelected" />
+</GenericModal>

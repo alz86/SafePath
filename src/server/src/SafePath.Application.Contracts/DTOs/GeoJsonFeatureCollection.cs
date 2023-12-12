@@ -9,7 +9,7 @@ namespace SafePath.DTOs
         public string Type { get; } = "FeatureCollection";
 
         [JsonPropertyName("features")]
-        public List<GeoJsonFeature> Features { get; set; } = new List<GeoJsonFeature>();
+        public List<GeoJsonFeature> Features { get; set; } = [];
     }
 
     public class GeoJsonFeature

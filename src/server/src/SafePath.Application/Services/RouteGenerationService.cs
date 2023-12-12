@@ -27,7 +27,7 @@ namespace SafePath.Services
     /// <summary>
     /// <inheritdoc />
     /// </summary>
-    public class RouteGenerationService : ApplicationService, IRouteGenerationService
+    public class RouteGenerationService : SafePathAppService, IRouteGenerationService
     {
         private readonly IItineroProxy itineroProxy;
         public RouteGenerationService(IItineroProxy itineroProxy)

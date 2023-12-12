@@ -26,7 +26,7 @@ namespace SafePath.EntityFrameworkCore.FastStorage
 
         public void InsertMany(IEnumerable<TEntity> elements)
         {
-            if (elements == null || !elements.Any())
+            if (elements?.Any() != true)
                 throw new ArgumentException("No elements provided to insert.", nameof(elements));
 
             DbContext.Set<TEntity>().AddRange(elements);
@@ -36,6 +36,8 @@ namespace SafePath.EntityFrameworkCore.FastStorage
 
         public void Delete(TEntity entity) => DbContext.Set<TEntity>().Remove(entity);
 
+        public void DeleteMany(IEnumerable<TEntity> elementsToDelete) => DbContext.Set<TEntity>().RemoveRange(elementsToDelete);
+
         public async Task<int> SaveChangesAsync()
         {
             var result = await DbContext.SaveChangesAsync();
@@ -43,7 +45,7 @@ namespace SafePath.EntityFrameworkCore.FastStorage
             //with this command we force the commit of the data from
             //the .wal file to the main one.
             await DbContext.Database.ExecuteSqlRawAsync("PRAGMA wal_checkpoint;");
-            
+
             return result;
         }
     }

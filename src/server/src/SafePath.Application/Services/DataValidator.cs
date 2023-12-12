@@ -28,6 +28,7 @@ namespace SafePath.Services
             this.itineroProxy = itineroProxy;
         }
 
+
         public Task ValidateCrimeReportCSVFile(string fileContent, out IList<CrimeEntry> entries)
         {
             if (string.IsNullOrWhiteSpace(fileContent))

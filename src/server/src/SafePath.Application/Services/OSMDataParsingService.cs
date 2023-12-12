@@ -6,7 +6,6 @@ using Itinero.Profiles;
 using Vehicle = Itinero.Osm.Vehicles.Vehicle;
 using System.Text.Json;
 using Node = OsmSharp.Node;
-using Itinero.SafePath;
 using System.Threading.Tasks;
 using System.IO;
 using System;
@@ -46,7 +45,7 @@ namespace SafePath.Services
     /// <inheritdoc />
     /// </summary>
     [RemoteService(false)]
-    public class OSMDataParsingService : ApplicationService, IOSMDataParsingService
+    public class OSMDataParsingService : SafePathAppService, IOSMDataParsingService
     {
         public const string ItineroDbFileName = "routeDb.pdb";
         public const string MapLibreLayerFileName = "maplibre.layer.json";
@@ -59,10 +58,11 @@ namespace SafePath.Services
         private readonly ISafetyScoreCalculator safetyScoreCalculator;
         private readonly IMapElementRepository mapElementRepository;
         private readonly ISafetyScoreElementRepository safetyScoreElementRepository;
+        private readonly IMaplibreLayerService maplibreLayerService;
 
         public OSMDataParsingService(
             IRepository<Area, Guid> areaRepository, IStorageProviderService storageProviderService, IAreaSetupProgressService areaSetupProgressService,
-            ISafetyScoreCalculator safetyScoreCalculator, IMapElementRepository mapElementRepository, ISafetyScoreElementRepository safetyScoreElementRepository)
+            ISafetyScoreCalculator safetyScoreCalculator, IMapElementRepository mapElementRepository, ISafetyScoreElementRepository safetyScoreElementRepository, IMaplibreLayerService maplibreLayerService)
         {
             this.areaRepository = areaRepository;
             this.storageProviderService = storageProviderService;
@@ -70,6 +70,7 @@ namespace SafePath.Services
             this.safetyScoreCalculator = safetyScoreCalculator;
             this.mapElementRepository = mapElementRepository;
             this.safetyScoreElementRepository = safetyScoreElementRepository;
+            this.maplibreLayerService = maplibreLayerService;
         }
 
         protected static IList<SecurityElementMapping> Mappings
@@ -112,7 +113,7 @@ namespace SafePath.Services
             var findTask = FindSecurityElements(areaId, tempFilePathKeys);
 
             //completes both tasks
-            await Task.WhenAll(new[] { saveTask, findTask });
+            await Task.WhenAll([saveTask, findTask]);
 
             //now that we have the elements in OSM that represent security indicators,
             //we need to map them all to its associated Edge and vertex
@@ -125,12 +126,10 @@ namespace SafePath.Services
 
             var createMaplibreLayerTask = CreateMapLibreDataLayer(areaId, elements, areaBaseKeys.Append(MapLibreLayerFileName));
 
-            await Task.WhenAll(new[] { safetyScoreTask, createMaplibreLayerTask });
+            await Task.WhenAll([safetyScoreTask, createMaplibreLayerTask]);
 
             //everything is done. we mark the area as completed
             areaSetupProgressService.MarkStepCompleted(areaId, AreaSetupProgress.Completed);
-
-            //TODO: adapt IItineroProxy to be able to read the data directly from memory objects.
         }
 
         private RouterDb GetRouterDbFromOSM(string[] keys)
@@ -139,7 +138,7 @@ namespace SafePath.Services
 
             //router db file parsing
             using (var stream = storageProviderService.OpenRead(keys))
-                routerDb.LoadOsmData(stream, new[] { Vehicle.Car, Vehicle.Bicycle, Vehicle.Pedestrian });
+                routerDb.LoadOsmData(stream, [Vehicle.Car, Vehicle.Bicycle, Vehicle.Pedestrian]);
 
             //we try to resolve a random point just to initialize the profiles info
             var pedestrian = routerDb.GetSupportedProfile("pedestrian");
@@ -271,36 +270,8 @@ namespace SafePath.Services
         /// </summary>
         private async Task CreateMapLibreDataLayer(Guid areaId, IReadOnlyList<MapElement> elements, string[] keys)
         {
-            var geoJson = new GeoJsonFeatureCollection();
-
-            foreach (var element in elements)
-            {
-                var feature = new GeoJsonFeature
-                {
-                    Geometry = new GeoJsonPoint
-                    {
-                        Coordinates = new[] { element.Lng, element.Lat }
-                    },
-                    Properties = new Dictionary<string, object>
-                    {
-                        { "OSMNodeId", element.OSMNodeId },
-                        { "type", element.Type.ToString() }
-                    }
-                };
-
-                geoJson.Features.Add(feature);
-            }
-
-            await SaveSupportFile(keys, geoJson);
-
+            await maplibreLayerService.GenerateMaplibreLayer(elements, keys);
             areaSetupProgressService.MarkStepCompleted(areaId, AreaSetupProgress.CreateMapLibreLayer);
-        }
-
-        private async Task SaveSupportFile(string[] keys, object data)
-        {
-            //TODO: save using protobuf.
-            using var stream = storageProviderService.OpenWrite(keys);
-            await JsonSerializer.SerializeAsync(stream, data);
         }
 
         private static SecurityElementTypes? CheckForTestData(Node node)

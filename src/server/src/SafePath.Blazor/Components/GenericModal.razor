@@ -1,0 +1,30 @@
+﻿<Modal Visible="Show">
+    <ModalContent Centered>
+        <ModalHeader>
+            <ModalTitle>@(Title)</ModalTitle>
+            <CloseButton />
+        </ModalHeader>
+        <ModalBody>
+            @ChildContent
+        </ModalBody>
+        <ModalFooter>
+            <Button Color="Color.Secondary" Clicked="() => HandleModalClose(true)">@(CloseText)</Button>
+            <Button Color="Color.Primary" Clicked="() => HandleModalClose(false)">@(AcceptText)</Button>
+        </ModalFooter>
+    </ModalContent>
+</Modal>
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public string Title { get; set; }
+    [Parameter] public RenderFragment ChildContent { get; set; }
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    [Parameter] public string AcceptText { get; set; } = "Accept";
+    [Parameter] public string CloseText { get; set; } = "Close";
+
+    private void HandleModalClose(bool isCancelling)
+    {
+        OnClose.InvokeAsync(isCancelling);
+    }
+}

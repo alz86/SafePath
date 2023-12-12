@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
 using SafePath.DTOs;
 using SafePath.Services;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -28,7 +29,7 @@ public partial class Index
     private readonly IAreaDataService areaDataService;
     private readonly IClientDataValidator clientDataValidator;
 
-    private IBrowserFile? csvFile;
+    private IBrowserFile? selectedFile;
     private bool mapLibreInitCalled = false;
 
     public Index(IUiMessageService uiMessageService, IAreaService areaService, IAreaDataService areaDataService, IClientDataValidator clientDataValidator)
@@ -57,6 +58,10 @@ public partial class Index
     protected GeoJsonFeatureCollection? SecurityElements { get; set; }
 
     protected bool ShowLoading { get; set; }
+
+    protected bool ShowCrimeDataDialog { get; set; }
+
+    protected bool ShowBulkDataDialog { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -101,14 +106,18 @@ public partial class Index
     private async Task ToggleLayer(string layerType)
     {
         // If we haven't already fetched the SecurityElements, fetch them
-        bool securityElementsSent = false;
+        bool securityElementsSet = false;
         if (SecurityElements == null)
         {
             ShowLoading = true;
             try
             {
-                SecurityElements = await areaService.GetSecurityLayerGeoJSON();
-                securityElementsSent = true;
+                SecurityElements = await areaService.GetSecurityLayerGeoJSON(SelectedArea!.Id);
+                securityElementsSet = true;
+            }
+            catch (Exception ex)
+            {
+                await uiMessageService.Error(ex.Message);
             }
             finally
             {
@@ -117,37 +126,70 @@ public partial class Index
         }
 
         // Send the data to JavaScript to either create or toggle the visibility of the layer
-        await JSRuntime.InvokeVoidAsync("showElements", layerType, securityElementsSent ? SecurityElements : null);
+        await JSRuntime.InvokeVoidAsync("showElements", layerType, securityElementsSet ? SecurityElements : null);
     }
 
-    private void LoadFiles(InputFileChangeEventArgs e)
+    private void OnFileSelected(InputFileChangeEventArgs e)
     {
-        csvFile = e.File;
+        selectedFile = e.File;
     }
 
-    private async Task UploadFile()
+    private async Task<string> ReadFileContent()
     {
-        if (csvFile == null)
+        if (selectedFile == null)
             throw new UserFriendlyException("There is not file selected to upload.");
-        else if (csvFile.Size == 0)
+        else if (selectedFile.Size == 0)
             throw new UserFriendlyException("The selected file is empty.");
-        else if (csvFile.Size > Constants.MaxCsvFileSize)
+        else if (selectedFile.Size > Constants.MaxCsvFileSize)
             throw new UserFriendlyException("The selected file to upload is too big. The maximum size allowed is 50MB.");
 
+        using (var stream = new StreamReader(selectedFile.OpenReadStream()))
+            return await stream.ReadToEndAsync();
+
+    }
+
+    private async Task UploadCSVFile(bool isCrimeData)
+    {
         ShowLoading = true;
+
         try
         {
-            string fileContent;
-            using (var stream = new StreamReader(csvFile.OpenReadStream()))
-                fileContent = await stream.ReadToEndAsync();
+            var fileContent = await ReadFileContent();
+            if (isCrimeData)
+            {
+                await clientDataValidator.ValidateCrimeReportCSVFile(fileContent);
+                await areaDataService.UploadCrimeReportCSV(SelectedArea!.Id, fileContent);
 
-            await clientDataValidator.ValidateCrimeReportCSVFile(fileContent);
-            await areaDataService.UploadCrimeReportCSV(SelectedArea!.Id, fileContent);
+            }
+            else
+            {
+                await areaDataService.UploadCrimeReportCSV(SelectedArea!.Id, fileContent);
+
+            }
             await uiMessageService.Success("The file was uploaded successfully.");
+        }
+        catch (Exception ex)
+        {
+            await uiMessageService.Error(ex.Message);
         }
         finally
         {
             ShowLoading = false;
+            this.StateHasChanged();
         }
+    }
+
+    private async Task HandleCrimeDataClosing(bool isCancelling)
+    {
+        ShowCrimeDataDialog = false;
+        if (!isCancelling) await UploadCSVFile(true);
+        selectedFile = null;
+    }
+
+    private async Task HandleBulkDataClosing(bool isCancelling)
+    {
+        ShowBulkDataDialog = false;
+        if (!isCancelling) await UploadCSVFile(false);
+        selectedFile = null;
     }
 }

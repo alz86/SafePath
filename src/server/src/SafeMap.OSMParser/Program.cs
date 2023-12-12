@@ -42,8 +42,9 @@ var areaSetupProgressService = application.Services.GetRequiredService<IAreaSetu
 var safetyScoreCalculator = application.Services.GetRequiredService<ISafetyScoreCalculator>();
 var mapElementRepository = application.Services.GetRequiredService<IMapElementRepository>();
 var safetyScoreElementRepository = application.Services.GetRequiredService<ISafetyScoreElementRepository>();
+var maplibreLayerService = application.Services.GetRequiredService<IMaplibreLayerService>();
 
-var s = new OSMDataParsingService(areaRepository, storageProviderService, areaSetupProgressService, safetyScoreCalculator, mapElementRepository, safetyScoreElementRepository);
+var s = new OSMDataParsingService(areaRepository, storageProviderService, areaSetupProgressService, safetyScoreCalculator, mapElementRepository, safetyScoreElementRepository, maplibreLayerService);
 await s.Parse(Guid.NewGuid(), new[] { "..", "..", "..", "Data" });
 
 // ABP tier down

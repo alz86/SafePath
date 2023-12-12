@@ -1,8 +1,9 @@
 ﻿using System.Threading.Tasks;
+using Volo.Abp.Application.Services;
 
 namespace SafePath.Services
 {
-    public class ClientDataValidator : IClientDataValidator
+    public class ClientDataValidator : SafePathAppService, IClientDataValidator
     {
         private readonly IDataValidator dataValidator;
 

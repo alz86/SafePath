@@ -12,6 +12,7 @@ namespace SafePath.Repositories.FastStorage
         void InsertMany(IEnumerable<TEntity> entities);
         void Update(TEntity entity);
         void Delete(TEntity entity);
+        void DeleteMany(IEnumerable<TEntity> elementsToDelete);
         Task<int> SaveChangesAsync();
     }
 }

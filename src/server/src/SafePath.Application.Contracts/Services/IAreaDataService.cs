@@ -23,5 +23,7 @@ namespace SafePath.Services
         /// The maximum size allowed for this file is 50mb.
         /// </remarks>
         Task UploadCrimeReportCSV(Guid areaId, string fileContent);
+
+        Task UploadBulkDataCSV(Guid areaId, string fileContent);
     }
 }

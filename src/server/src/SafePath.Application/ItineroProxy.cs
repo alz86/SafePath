@@ -1,17 +1,13 @@
 ﻿using Itinero;
-using System.Threading.Tasks;
 using Itinero.Profiles;
 using Itinero.Safety;
 using SafePath.DTOs;
 using Volo.Abp.DependencyInjection;
-using System.Text.Json;
 using Itinero.SafePath;
-using System.Collections.Generic;
 using System;
 using System.Linq;
 using static SafePath.ItineroProxy;
 using SafePath.Services;
-using SafePath.Entities.FastStorage;
 
 namespace SafePath
 {
@@ -43,29 +39,13 @@ namespace SafePath
         /// Initializes the object, doing heavy task like
         /// reading the map DB from the disk.
         /// </summary>
-        Task Init(string[] folderKeys);
+        void Init(string[] folderKeys);
 
         /// <summary>
         /// Indicates whether the object has been
         /// initied.
         /// </summary>
         bool Initied { get; }
-
-        /// <summary>
-        /// Gets the list of security elements (police stations,
-        /// hospital, bus stops, etc.) associated to the system's 
-        /// default area.
-        /// </summary>
-        IReadOnlyList<MapElement> SecurityElements { get; }
-
-        /// <summary>
-        /// Gets the GeoJSON representation of an extra layer drawn over
-        /// system's maps to show the different security elements mapped.
-        /// </summary>
-        GeoJsonFeatureCollection SecurityLayerGeoJSON { get; }
-
-
-        Task UpdatePoint(Guid areaId, IEnumerable<PointDto> points);
     }
 
     /// <summary>
@@ -77,17 +57,13 @@ namespace SafePath
         /// Gets the list of routing profiles that SafePath currently
         /// supports
         /// </summary>
-        private static readonly string[] SupportedProfiles = new[] { "pedestrian", "bicycle" };
+        private static readonly string[] SupportedProfiles = ["pedestrian", "bicycle"];
 
-        const int SearchDistanceInMeters = 50;
+        private const int SearchDistanceInMeters = 50;
 
         private RouterDb? routerDb;
         private Router? router;
         private IProfileInstance[]? profiles;
-
-        private IList<MapElement>? securityElementsList;
-        private IReadOnlyList<MapElement>? securityElements;
-        private GeoJsonFeatureCollection? securityLayerGeoJSON;
 
         private readonly IStorageProviderService storageProviderService;
         private readonly ISafetyScoreRepository safetyScoreRepository;
@@ -96,33 +72,6 @@ namespace SafePath
         {
             this.storageProviderService = storageProviderService;
             this.safetyScoreRepository = safetyScoreRepository;
-        }
-
-        /// <summary>
-        /// <inheritdoc />
-        /// </summary>
-        public IReadOnlyList<MapElement> SecurityElements
-        {
-            get
-            {
-                EnsureInited();
-                return securityElements!;
-            }
-            private set { securityElements = value; }
-        }
-
-
-        /// <summary>
-        /// <inheritdoc />
-        /// </summary>
-        public GeoJsonFeatureCollection SecurityLayerGeoJSON
-        {
-            get
-            {
-                EnsureInited();
-                return securityLayerGeoJSON!;
-            }
-            private set { securityLayerGeoJSON = value; }
         }
 
         /// <summary>
@@ -145,13 +94,9 @@ namespace SafePath
         /// <summary>
         /// <inheritdoc />
         /// </summary>
-        public async Task Init(string[] folderKeys)
+        public void Init(string[] folderKeys)
         {
-            await Task.WhenAll(new[]
-            {
-                Task.Run(() => InitItineroRouter(folderKeys.Append(OSMDataParsingService.ItineroDbFileName))),
-                Task.Run(() => LoadMapLibreLayer(folderKeys.Append(OSMDataParsingService.MapLibreLayerFileName)))
-            });
+            InitItineroRouter(folderKeys.Append(OSMDataParsingService.ItineroDbFileName));
             Initied = true;
         }
 
@@ -203,16 +148,6 @@ namespace SafePath
         }
 
         /// <summary>
-        /// Loads the extra layer created to display the security
-        /// elements in the system maps.
-        /// </summary>
-        /// <param name="scoreParamsPath">Path of the file storing the information.</param>
-        private async Task LoadMapLibreLayer(string[] layerPath) =>
-            securityLayerGeoJSON = (await ReadSupportFile<GeoJsonFeatureCollection>(layerPath))!;
-
-        
-
-        /// <summary>
         /// Inits the components associated to Itinero
         /// </summary>
         /// <param name="routeDbDataPath">Path to the Itinero db
@@ -220,11 +155,20 @@ namespace SafePath
         private void InitItineroRouter(string[] routeDbDataPath)
         {
             using (var stream = storageProviderService.OpenRead(routeDbDataPath))
-                this.routerDb = RouterDb.Deserialize(stream);
+                routerDb = RouterDb.Deserialize(stream);
 
-            this.router = new Router(routerDb);
+            router = new Router(routerDb);
 
-            this.profiles = SupportedProfiles.Select(routerDb.GetSupportedProfile).ToArray();
+            profiles = SupportedProfiles.Select(routerDb.GetSupportedProfile).ToArray();
+        }
+
+        //TODO: refactor, it is quite wimp
+        private IProfileInstance GetItinieroProfile(SupportedProfile profile) => profiles![((int)profile) - 1];
+
+        public enum SupportedProfile
+        {
+            Pedestrian = 1,
+            Bike
         }
 
         public enum PointUpateResult
@@ -234,71 +178,5 @@ namespace SafePath
             Success,
             NotChanged
         }
-
-        public async Task UpdatePoint(Guid areaId, IEnumerable<PointDto> points)
-        {
-            //TODO: this code duplicates what is on OSMDataParsingService, but everything will be
-            //refactored soon, so it will be deleted.
-            var results = new List<PointUpateResult>(points.Count());
-            foreach (var point in points)
-            {
-                var type = (SecurityElementTypes)point.Type;
-                var secElement = SecurityElements.FirstOrDefault(s => s.Lat == point.Coordinates.Lat && s.Lng == point.Coordinates.Lng);
-                var isNew = secElement == null;
-                if (isNew)
-                {
-                    var itineroInfo = GetItineroEdgeIds((float)point.Coordinates.Lat, (float)point.Coordinates.Lng);
-                    if (itineroInfo.Error)
-                    {
-                        results.Add(PointUpateResult.PointNotFound);
-                        continue;
-                    }
-
-                    secElement = new MapElement
-                    {
-                        Lng = point.Coordinates.Lng,
-                        Lat = point.Coordinates.Lat,
-                        Type = type,
-                        EdgeId = itineroInfo.EdgeId!.Value,
-                        VertexId = itineroInfo.VertexId!.Value,
-                    };
-                    securityElementsList!.Add(secElement);
-                }
-                else if (secElement!.Type == type)
-                {
-                    results.Add(PointUpateResult.NotChanged);
-                    continue;
-                }
-
-                //if reached here, it is a new element or a change of type.
-                //in any case, we have to update the rest of the supplementary
-                //info (safety score and maplibre map).
-                secElement.Type = type;
-
-
-
-                results.Add(PointUpateResult.Success);
-            }
-
-            var hasChanged = results.Any(r => r == PointUpateResult.Success);
-        }
-
-        //TODO: refactor, it is quite wimp
-        private IProfileInstance GetItinieroProfile(SupportedProfile profile) => profiles![((int)profile) - 1];
-
-        //TODO: centralice with WriteSupportFile
-        private async Task<T?> ReadSupportFile<T>(string[] path)
-        {
-            using var stream = storageProviderService.OpenRead(path);
-            return await JsonSerializer.DeserializeAsync<T>(stream);
-
-        }
-
-        public enum SupportedProfile
-        {
-            Pedestrian = 1,
-            Bike
-        }
-
     }
 }

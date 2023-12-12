@@ -1,4 +1,5 @@
-﻿using SafePath.Classes;
+﻿using Microsoft.AspNetCore.Authorization;
+using SafePath.Classes;
 using SafePath.DTOs;
 using SafePath.Entities;
 using SafePath.Entities.FastStorage;
@@ -7,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp.Caching;
 using Volo.Abp.Domain.Repositories;
 
 namespace SafePath.Services
@@ -20,8 +22,13 @@ namespace SafePath.Services
         private readonly IRepository<CrimeDataUploading, Guid> crimeDataUploadingRepository;
         private readonly IRepository<CrimeDataUploadingEntry, Guid> crimeDataUploadingEntryRepository;
         private readonly IDataValidator dataValidator;
+        private readonly IMaplibreLayerService maplibreLayerService;
+        private readonly IDistributedCache<IList<MapSecurityElementDto>> mapSecurityElementsCache;
+        private readonly IDistributedCache<GeoJsonFeatureCollection> maplibreLayerCache;
+        private readonly IAreaService areaService;
+        private readonly ISafetyScoreChangeTrackerFactory safetyScoreChangeTrackerFactory;
 
-        public AreaDataService(IMapElementRepository mapElementRepository, IItineroProxy itineroProxy, ISafetyScoreElementRepository safetyScoreElementRepository, ISafetyScoreCalculator safetyScoreCalculator, IRepository<CrimeDataUploading, Guid> crimeDataUploadingRepository, IRepository<CrimeDataUploadingEntry, Guid> crimeDataUploadingEntryRepository, IItineroProxy proxy, IDataValidator dataValidator)
+        public AreaDataService(IMapElementRepository mapElementRepository, IItineroProxy itineroProxy, ISafetyScoreElementRepository safetyScoreElementRepository, ISafetyScoreCalculator safetyScoreCalculator, IRepository<CrimeDataUploading, Guid> crimeDataUploadingRepository, IRepository<CrimeDataUploadingEntry, Guid> crimeDataUploadingEntryRepository, IItineroProxy proxy, IDataValidator dataValidator, IMaplibreLayerService maplibreLayerService, IDistributedCache<IList<MapSecurityElementDto>> mapSecurityElementsCache, IDistributedCache<GeoJsonFeatureCollection> maplibreLayerCache, IAreaService areaService, ISafetyScoreChangeTrackerFactory safetyScoreChangeTrackerFactory)
         {
             this.itineroProxy = itineroProxy;
             this.mapElementRepository = mapElementRepository;
@@ -30,52 +37,57 @@ namespace SafePath.Services
             this.crimeDataUploadingRepository = crimeDataUploadingRepository;
             this.crimeDataUploadingEntryRepository = crimeDataUploadingEntryRepository;
             this.dataValidator = dataValidator;
+            this.maplibreLayerService = maplibreLayerService;
+            this.mapSecurityElementsCache = mapSecurityElementsCache;
+            this.maplibreLayerCache = maplibreLayerCache;
+            this.areaService = areaService;
+            this.safetyScoreChangeTrackerFactory = safetyScoreChangeTrackerFactory;
         }
-        public async Task UpdatePoint(Guid areaId, PointDto point)
-        {
-            UpdatePointInternal(areaId, point.MapElementId, (float)point.Coordinates.Lat, (float)point.Coordinates.Lng, (SecurityElementTypes)point.Type);
-            await safetyScoreElementRepository.SaveChangesAsync();
-        }
+
+        // [AllowAnonymous]
+        public Task UpdatePoint(Guid areaId, PointDto point) => UpdatePoints(areaId, [point]);
 
         public async Task UpdatePoints(Guid areaId, IEnumerable<PointDto> points)
         {
-            Parallel.ForEach(points, p =>
+            var tracker = safetyScoreChangeTrackerFactory.Create();
+            var hasChanges = false;
+            foreach (var p in points)
             {
-                UpdatePointInternal(areaId, p.MapElementId, (float)p.Coordinates.Lat, (float)p.Coordinates.Lng, (SecurityElementTypes)p.Type);
-            });
-            await safetyScoreElementRepository.SaveChangesAsync();
+                var changed = await UpdatePointInternal(areaId, p.MapElementId, p.Coordinates.Lat, p.Coordinates.Lng, (SecurityElementTypes)p.Type, tracker);
+                if (changed) hasChanges = true;
+            }
+
+            if (!hasChanges) return;
+
+            var scoresUpdated = tracker.UpdateScores();
+
+            //TODO: centralice with what is on OSMDataParsingService
+            var areaBaseKeys = new[] { "Resources", areaId.ToString(), OSMDataParsingService.MapLibreLayerFileName };
+            var elements = mapElementRepository.GetByAreaId(areaId);
+
+            //TODO: lock procress using abp.io interlock mechanism
+            await Task.WhenAll([
+                safetyScoreElementRepository.SaveChangesAsync(),
+                maplibreLayerService.GenerateMaplibreLayer(elements, areaBaseKeys)
+            ]);
+
+            await areaService.ClearSecurityInfoCache(areaId);
         }
 
-        protected void UpdatePointInternal(Guid areaId, int? elementId, float lat, float lng, SecurityElementTypes elementType)
+        protected async Task<bool> UpdatePointInternal(Guid areaId, int? elementId, double lat, double lng, SecurityElementTypes elementType, ISafetyScoreChangeTracker tracker)
         {
-            //currently the AreaId is not used.
-            var scoresToRecalculate = new List<SafetyScoreElement>();
+            //NOTE: currently the AreaId is not used.
             bool mustAdd = false, mustRecalculate = false;
 
-            var existingElement = elementId.HasValue ? mapElementRepository.GetById(elementId.Value, true) : null;
-            if (existingElement == null)
-            {
-                //TODO: add error handling
-                //TODO: prior asking to itinero for the coordinate info, check if it is
-                //not already resolved and stored in the Sqlite db
-                var itineroPoint = itineroProxy.GetItineroEdgeIds(lat, lng);
-                if (itineroPoint.Error) return;
+            MapElement? existingElement = null;
 
-                //user is adding an element
-                existingElement = new MapElement
-                {
-                    Lat = lat,
-                    Lng = lng,
-                    EdgeId = itineroPoint.EdgeId,
-                    VertexId = itineroPoint.VertexId,
-                    Type = elementType
-                };
-                mapElementRepository.Insert(existingElement);
-                mustAdd = mustRecalculate = true;
-            }
-            else
+            if (elementId.HasValue)
             {
-                if (existingElement.Lat != lat || existingElement.Lng != lng)
+                existingElement = mapElementRepository.GetById(elementId.Value, true);
+                if (existingElement == null) return false;
+
+                var elementMoved = existingElement.Lat != lat || existingElement.Lng != lng;
+                if (elementMoved)
                 {
                     //user moved the element away. we have to check whether it is still
                     //on the same edge or a new one. if that happened, we need to update the new
@@ -83,19 +95,21 @@ namespace SafePath.Services
                     //calculated using this point and update them
 
                     //TODO: add error handling
-                    var itineroPoint = itineroProxy.GetItineroEdgeIds(lat, lng);
-                    if (itineroPoint.Error) return;
+                    var itineroPoint = itineroProxy.GetItineroEdgeIds((float)lat, (float)lng);
+                    if (itineroPoint.Error) return false;
 
                     var edgeChanged = itineroPoint.EdgeId != existingElement.EdgeId;
                     var typeChanged = existingElement.Type != elementType;
                     if (edgeChanged || typeChanged)
                     {
-                        //marks all the associated scores to be re-calculated
-                        scoresToRecalculate.AddRange(existingElement.SafetyScoreElements.ToList());
+                        //sfety score in this element has to be re-calculated
+                        tracker.Track(existingElement.SafetyScoreElements.ToArray());
+                        //scoresToRecalculate.AddRange(existingElement.SafetyScoreElements.ToList());
+
                         if (edgeChanged) existingElement.SafetyScoreElements.Clear();
                     }
 
-                    //updates the data
+                    //updates the data (type is updated later)
                     existingElement.Lat = lat;
                     existingElement.Lng = lng;
                     existingElement.EdgeId = itineroPoint.EdgeId;
@@ -109,7 +123,7 @@ namespace SafePath.Services
                     if (existingElement.Type == elementType)
                     {
                         //nothing changed.
-                        return;
+                        return false;
                     }
 
                     //if reaches here, the type changed, so it has to 
@@ -117,52 +131,79 @@ namespace SafePath.Services
                     mustRecalculate = true;
                 }
 
-
                 existingElement.Type = elementType;
                 mapElementRepository.Update(existingElement);
             }
+            else
+            {
+                //TODO: prior asking to itinero for the coordinate info, check if it is
+                //not already resolved and stored in the Sqlite db
+                //TODO: add error handling
+                var itineroPoint = itineroProxy.GetItineroEdgeIds((float)lat, (float)lng);
+                if (itineroPoint.Error) return false;
 
+                //if there wasn't an element Id, we still need to
+                //check by coordinates if there is already an element in the DB. thus,
+                //we list them alls and look for one with the same type.
+                var elementsOnEdge = mapElementRepository.GetByEdgeId(itineroPoint.EdgeId!.Value);
+
+                if (elementsOnEdge?.Any(e => e.Type == elementType) == true)
+                    return false; //element already exists
+
+                //user is adding an element
+                existingElement = new MapElement
+                {
+                    Lat = lat,
+                    Lng = lng,
+                    EdgeId = itineroPoint!.EdgeId,
+                    VertexId = itineroPoint.VertexId,
+                    Type = elementType
+                };
+                mapElementRepository.Insert(existingElement);
+                mustAdd = mustRecalculate = true;
+            }
 
             //safety info
-            SafetyScoreElement? safetyInfo = safetyScoreElementRepository.GetByEdgeId(existingElement.EdgeId!.Value, true);
+            SafetyScoreElement? safetyInfo = safetyScoreElementRepository.GetByEdgeId(existingElement.EdgeId!.Value, false);
             if (safetyInfo == null)
             {
                 safetyInfo = new SafetyScoreElement
                 {
                     EdgeId = existingElement.EdgeId!.Value
                 };
-                //safetyInfo.MapElements.Add(existingElement);
                 mustAdd = mustRecalculate = true;
             }
 
             if (mustAdd)
+            {
                 safetyInfo.MapElements.Add(existingElement);
 
-            if (mustRecalculate)
-                safetyInfo.Score = safetyScoreCalculator.Calculate(safetyInfo.MapElements);
+                //saves the entity to the db            
+                if (safetyInfo.Id == 0)
+                    safetyScoreElementRepository.Insert(safetyInfo);
+                else
+                    safetyScoreElementRepository.Update(safetyInfo);
 
-            if (safetyInfo.Id == 0)
-                safetyScoreElementRepository.Insert(safetyInfo);
-            else
-                safetyScoreElementRepository.Update(safetyInfo);
-
-            //if some other elements were also marked to be recalculated.
-            //then we go through them calculating the new score
-            //TODO: this list should be returned and all the elements recalculated
-            //together, since chances are that the same element need to be recalculated by
-            //changes on different points
-            foreach (var score in scoresToRecalculate)
-            {
-                var newScore = safetyScoreCalculator.Calculate(score.MapElements);
-                if (newScore != score.Score)
-                {
-                    score.Score = newScore;
-                    safetyScoreElementRepository.Update(score);
-                }
+                //changes has to be saved in the DB, in order to have ids set and
+                //be able to later recalculate scores. Also, we need to ensure that if
+                //a new SafetyScoreElement was created, it is on the DB for next iterations,
+                //in order for them to do not create a new entity associated to the EdgeId.
+                await safetyScoreElementRepository.SaveChangesAsync();
+                //TODO: refactor the code to avoid having to commit changes on every iteration
             }
+
+            //marks the element to be recalculated
+            if (mustRecalculate)
+                tracker.Track(safetyInfo);
+
+            return true;
         }
 
+        public async Task UploadBulkDataCSV(Guid areaId, string fileContent)
+        {
+            //TODO: validate entries
 
+        }
 
         /// <summary>
         /// <inheritdoc />
@@ -170,34 +211,144 @@ namespace SafePath.Services
         public async Task UploadCrimeReportCSV(Guid areaId, string fileContent)
         {
             await dataValidator.ValidateCrimeReportCSVFile(fileContent, out IList<CrimeEntry> entries);
-            
+
+            var tracker = safetyScoreChangeTrackerFactory.Create();
+
             //data is valid, let's save it in the DB.
             var uploadingEntity = new CrimeDataUploading { RawData = fileContent, TenantId = CurrentTenant!.Id };
             uploadingEntity = await crimeDataUploadingRepository.InsertAsync(uploadingEntity);
 
-            var dbEntries = entries.Select(e => new CrimeDataUploadingEntry
+            //deletes reports with Severity = 0
+            var entriesToDelete = entries
+                .Where(e => e.Severity == 0)
+                .Select(e => new CoordinatesDto { Lat = e.Latitude, Lng = e.Longitude })
+                .ToList();
+
+            if (entriesToDelete.Count > 0)
+            {
+                //delete is made in two steps. First we get the entities to delete,
+                //track their associated SafetyScoreElements and then delete them.
+                var elementsToDelete = mapElementRepository.FindCrimeDataByCoordinates(entriesToDelete)!;
+                tracker.Track(elementsToDelete.ToArray());
+
+                mapElementRepository.DeleteMany(elementsToDelete);
+            }
+
+            //updates the rest of the entities
+            var updates = entries
+                    .Where(e => e.Severity != 0)
+                    .Select(e => UpdateCrimeEntry(e, tracker));
+            var somethingChanged = entriesToDelete.Count > 0 || updates.Any(updated => updated == true);
+            if (somethingChanged)
+            {
+                await Task.WhenAll([
+                    mapElementRepository.SaveChangesAsync(),
+                    areaService.ClearSecurityInfoCache(areaId)
+                ]);
+            }
+
+            /*
+            var dbEntries = entries.Where(e => e.Severity > 0).Select(e => new CrimeDataUploadingEntry
             {
                 Latitude = e.Latitude,
                 Longitude = e.Longitude,
                 Severity = e.Severity,
                 CrimeDataUploading = uploadingEntity
             });
+            */
+            /*
+             * TODO: remove, no need to record which entry are we saving
             await crimeDataUploadingEntryRepository.InsertManyAsync(dbEntries);
+            */
 
-            //TODO: regenerate safety info
-            await UpdateSafetyDB(areaId, dbEntries);
+            //await UpdateSafetyDB(areaId, dbEntries);
+            //await areaService.ClearSecurityInfoCache(areaId);
         }
+
+        private bool UpdateCrimeEntry(CrimeEntry entry, ISafetyScoreChangeTracker tracker)
+        {
+            if (entry.Severity == 0) return false;
+
+            var typeToSet = GetCrimeReportElementType(entry.Severity);
+
+            //looks for the elements associated to the coordinates of this report
+            var elements = mapElementRepository.GetByCoordinates(entry.Latitude, entry.Longitude);
+            if (elements.Count > 0)
+            {
+                //we need to check if there are elements representing a crime report but with a different
+                //level than the current one
+                var crimeElement = elements.FirstOrDefault(e =>
+                    e.Type == SecurityElementTypes.CrimeReport_Severity_1 ||
+                    e.Type == SecurityElementTypes.CrimeReport_Severity_2 ||
+                    e.Type == SecurityElementTypes.CrimeReport_Severity_3 ||
+                    e.Type == SecurityElementTypes.CrimeReport_Severity_4 ||
+                    e.Type == SecurityElementTypes.CrimeReport_Severity_5);
+
+                if (crimeElement != null)
+                {
+                    if (crimeElement.Type == typeToSet) return false; //nothing to update
+
+                    crimeElement.Type = typeToSet;
+                    mapElementRepository.Update(crimeElement);
+                    tracker.Track(crimeElement);
+                    return true;
+                }
+            }
+
+            //a new element has to be created
+
+            var itineroInfo = itineroProxy.GetItineroEdgeIds((float)entry.Latitude, (float)entry.Longitude);
+            //TODO: handle errors
+            if (itineroInfo.Error) return false;
+
+            var mapElement = new MapElement
+            {
+                Lat = entry.Latitude,
+                Lng = entry.Longitude,
+                Type = typeToSet,
+                EdgeId = itineroInfo.EdgeId,
+                VertexId = itineroInfo.VertexId,
+                //TODO: resolve OSM Node Id
+            };
+            mapElementRepository.Insert(mapElement);
+
+            //now we look for the associated safetyScore element. it may be one element associated
+            //to the same edge id, or not.
+            var score = safetyScoreElementRepository.GetByEdgeId(itineroInfo.EdgeId!.Value, false);
+            if (score == null)
+            {
+                //if there is no element yet, then we need to create it. we also
+                //calculate the score and save it. then, there is no need to 
+                //track it to recalculate its score, as we do with the other
+                score = new SafetyScoreElement
+                {
+                    EdgeId = itineroInfo.EdgeId!.Value,
+                    Score = safetyScoreCalculator.Calculate([mapElement])
+                };
+                score.MapElements.Add(mapElement);
+                safetyScoreElementRepository.Insert(score);
+            }
+            else
+            {
+                tracker.Track(score);
+            }
+
+            return true;
+        }
+
 
         private Task UpdateSafetyDB(Guid areaId, IEnumerable<CrimeDataUploadingEntry> dbEntries)
         {
+            var tracker = safetyScoreChangeTrackerFactory.Create();
             //points to save
             var pointsToSave = dbEntries.Where(d => d.Severity >= 1 && d.Severity <= 5);
 
-            Parallel.ForEach(pointsToSave, p =>
+            foreach (var p in pointsToSave)
             {
-                UpdatePointInternal(areaId, null, p.Latitude, p.Longitude, GetCrimeReportElementType(p.Severity));
-            });
+                UpdatePointInternal(areaId, null, p.Latitude, p.Longitude, GetCrimeReportElementType(p.Severity), tracker);
+            }
 
+            //TODO: complete
             var pointsToDelete = dbEntries.Where(d => d.Severity == 0);
             DeletePoints(areaId, dbEntries);
 
@@ -252,7 +403,7 @@ namespace SafePath.Services
             }
         }
 
-        private SecurityElementTypes GetCrimeReportElementType(float severity)
+        private static SecurityElementTypes GetCrimeReportElementType(float severity)
         {
             return severity switch
             {
@@ -263,8 +414,5 @@ namespace SafePath.Services
                 _ => SecurityElementTypes.CrimeReport_Severity_1,
             };
         }
-
-
-        
     }
 }
