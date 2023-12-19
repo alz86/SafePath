@@ -11,13 +11,13 @@ namespace SafePath.Repositories.FastStorage
 
         MapElement? GetById(int id, bool includeDetails = true);
 
-        IList<MapElement>? GetByEdgeId(ulong edgeId, bool includeDetails = true);
+        IList<MapElement> GetByEdgeId(ulong edgeId, bool includeDetails = true);
 
         int BulkDeleteCrimeDataByCoordinates(IEnumerable<CoordinatesDto> coordinates);
 
         IList<MapElement>? FindCrimeDataByCoordinates(IEnumerable<CoordinatesDto> coordinates);
 
         IList<MapElement> GetByCoordinates(float latitude, float longitude);
-        
+        IList<MapElement> FindCrimeDataByEdgeIds(IList<uint> list);
     }
 }

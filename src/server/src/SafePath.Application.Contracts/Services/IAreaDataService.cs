@@ -1,4 +1,5 @@
-﻿using SafePath.DTOs;
+﻿using SafePath.Classes;
+using SafePath.DTOs;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -8,9 +9,9 @@ namespace SafePath.Services
 {
     public interface IAreaDataService : IApplicationService
     {
-        Task UpdatePoint(Guid areaId, PointDto point);
+        Task<MapElementUpdateResult> UpdatePoint(Guid areaId, PointDto point);
 
-        Task UpdatePoints(Guid areaId, IEnumerable<PointDto> points);
+        Task<List<MapElementUpdateResult>> UpdatePoints(Guid areaId, IEnumerable<PointDto> points);
 
 
         /// <summary>

@@ -24,7 +24,7 @@ namespace SafePath.EntityFrameworkCore.FastStorage
             return query.FirstOrDefault();
         }
 
-        public IList<MapElement>? GetByEdgeId(ulong edgeId, bool includeDetails = true)
+        public IList<MapElement> GetByEdgeId(ulong edgeId, bool includeDetails = true)
         {
             var query = DbContext.MapElements.Where(m => m.EdgeId == edgeId);
             if (includeDetails) query = query.Include(q => q.SafetyScoreElements);
@@ -76,5 +76,19 @@ WHERE {nameof(MapElement.Type)} IN ({typesFilter}) AND ({coordFilter})";
 
         public IList<MapElement> GetByCoordinates(float latitude, float longitude) =>
             DbContext.MapElements.Where(m => m.Lat == latitude && m.Lng == longitude).ToList();
+
+        public IList<MapElement> FindCrimeDataByEdgeIds(IList<uint> list)
+        {
+            SecurityElementTypes[] typesToFilter = [SecurityElementTypes.CrimeReport_Severity_1,
+                SecurityElementTypes.CrimeReport_Severity_2,
+                SecurityElementTypes.CrimeReport_Severity_3,
+                SecurityElementTypes.CrimeReport_Severity_4,
+                SecurityElementTypes.CrimeReport_Severity_5];
+
+            return DbContext.MapElements
+                .Where(m => m.EdgeId != null && list.Contains(m.EdgeId.Value) &&
+                        typesToFilter.Contains(m.Type)
+                ).ToList();
+        }
     }
 }

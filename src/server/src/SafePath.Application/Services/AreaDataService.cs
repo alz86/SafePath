@@ -9,7 +9,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Caching;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace SafePath.Services
 {
@@ -45,61 +47,128 @@ namespace SafePath.Services
         }
 
         // [AllowAnonymous]
-        public Task UpdatePoint(Guid areaId, PointDto point) => UpdatePoints(areaId, [point]);
-
-        public async Task UpdatePoints(Guid areaId, IEnumerable<PointDto> points)
+        public async Task<MapElementUpdateResult> UpdatePoint(Guid areaId, PointDto point)
         {
-            var tracker = safetyScoreChangeTrackerFactory.Create();
-            var hasChanges = false;
-            foreach (var p in points)
-            {
-                var changed = await UpdatePointInternal(areaId, p.MapElementId, p.Coordinates.Lat, p.Coordinates.Lng, (SecurityElementTypes)p.Type, tracker);
-                if (changed) hasChanges = true;
-            }
-
-            if (!hasChanges) return;
-
-            var scoresUpdated = tracker.UpdateScores();
-
-            //TODO: centralice with what is on OSMDataParsingService
-            var areaBaseKeys = new[] { "Resources", areaId.ToString(), OSMDataParsingService.MapLibreLayerFileName };
-            var elements = mapElementRepository.GetByAreaId(areaId);
-
-            //TODO: lock procress using abp.io interlock mechanism
-            await Task.WhenAll([
-                safetyScoreElementRepository.SaveChangesAsync(),
-                maplibreLayerService.GenerateMaplibreLayer(elements, areaBaseKeys)
-            ]);
-
-            await areaService.ClearSecurityInfoCache(areaId);
+            var result = await UpdatePoints(areaId, [point]);
+            return result.First();
         }
 
-        protected async Task<bool> UpdatePointInternal(Guid areaId, int? elementId, double lat, double lng, SecurityElementTypes elementType, ISafetyScoreChangeTracker tracker)
+        public Task<List<MapElementUpdateResult>> UpdatePoints(Guid areaId, IEnumerable<PointDto> points)
+        {
+            var dtos = points.Select(p => new MapElementUpdateDto
+            {
+                AreaId = areaId,
+                Lat = p.Coordinates.Lat,
+                Lng = p.Coordinates.Lng,
+                ElementType = (SecurityElementTypes)p.Type,
+                ElementId = p.MapElementId
+            }).ToList();
+            return UpdatePointsInternal(dtos);
+        }
+
+        public async Task<List<MapElementUpdateResult>> UpdatePointsInternal(IEnumerable<MapElementUpdateDto>? updateDtos, IEnumerable<MapElementUpdateDto>? deleteDtos = null)
+        {
+            bool hasUpdates = updateDtos?.Any() == true,
+                hasDeletes = deleteDtos?.Any() == true;
+
+            if (!hasUpdates && !hasDeletes) return [];
+
+            var areaId = updateDtos?.FirstOrDefault()?.AreaId ?? deleteDtos?.FirstOrDefault()?.AreaId ?? Guid.Empty;
+            var tracker = safetyScoreChangeTrackerFactory.Create();
+            var results = new List<MapElementUpdateResult>(updateDtos?.Count() ?? 0 + deleteDtos?.Count() ?? 0);
+
+            if (hasUpdates)
+            {
+                foreach (var dto in updateDtos!)
+                {
+                    MapElementUpdateResult result;
+                    try
+                    {
+                        result = await UpdatePointInternal(dto, tracker);
+                    }
+                    catch (Exception ex)
+                    {
+                        HandleException(ex);
+                        result = UpdateResult(MapElementUpdateResult.ResultValues.Error);
+                    }
+
+                    results.Add(result);
+                }
+            }
+
+            //delete points
+            if (hasDeletes)
+            {
+                foreach (var dto in deleteDtos!)
+                {
+                    MapElementUpdateResult result;
+                    try
+                    {
+                        result = DeleteMapElements(dto, tracker);
+                    }
+                    catch (Exception ex)
+                    {
+                        HandleException(ex);
+                        result = UpdateResult(MapElementUpdateResult.ResultValues.Error);
+                    }
+
+                    results.Add(result);
+                }
+            }
+
+            //if there was changes, we have to recalculate safety scores and regenerate the MapLibre layer
+            var hasChanges = results.Any(r => r.Result == MapElementUpdateResult.ResultValues.Success);
+            if (hasChanges)
+            {
+                var scoresUpdated = tracker.UpdateScores();
+
+                //TODO: centralice with what is on OSMDataParsingService
+                var areaBaseKeys = new[] { "Resources", areaId.ToString(), OSMDataParsingService.MapLibreLayerFileName };
+                var elements = mapElementRepository.GetByAreaId(areaId);
+
+                //TODO: lock procress using abp.io interlock mechanism
+                await Task.WhenAll([
+                    safetyScoreElementRepository.SaveChangesAsync(),
+                    maplibreLayerService.GenerateMaplibreLayer(elements, areaBaseKeys)
+                ]);
+
+                await areaService.ClearSecurityInfoCache(areaId);
+            }
+
+            return results;
+        }
+
+        protected async Task<MapElementUpdateResult> UpdatePointInternal(MapElementUpdateDto dto, ISafetyScoreChangeTracker tracker)
         {
             //NOTE: currently the AreaId is not used.
-            bool mustAdd = false, mustRecalculate = false;
+            bool mustAdd = false, mustRecalculate = false, elementCreated = false;
 
             MapElement? existingElement = null;
 
-            if (elementId.HasValue)
+            if (dto.ElementId.HasValue)
             {
-                existingElement = mapElementRepository.GetById(elementId.Value, true);
-                if (existingElement == null) return false;
+                existingElement = mapElementRepository.GetById(dto.ElementId.Value, true);
+                if (existingElement == null) return UpdateResult(MapElementUpdateResult.ResultValues.NotFound);
 
-                var elementMoved = existingElement.Lat != lat || existingElement.Lng != lng;
+                var elementMoved = existingElement.Lat != dto.Lat || existingElement.Lng != dto.Lng;
                 if (elementMoved)
                 {
                     //user moved the element away. we have to check whether it is still
                     //on the same edge or a new one. if that happened, we need to update the new
                     //point coordinates, but also check for the previous score
                     //calculated using this point and update them
+                    if (dto.EdgeId == null)
+                    {
+                        var itineroPoint = itineroProxy.GetItineroEdgeIds((float)dto.Lat, (float)dto.Lng);
+                        //TODO: add error handling
+                        if (itineroPoint.Error) return UpdateResult(MapElementUpdateResult.ResultValues.PointNotInMap);
 
-                    //TODO: add error handling
-                    var itineroPoint = itineroProxy.GetItineroEdgeIds((float)lat, (float)lng);
-                    if (itineroPoint.Error) return false;
+                        dto.EdgeId = itineroPoint.EdgeId;
+                        dto.VertexId = itineroPoint.VertexId;
+                    }
 
-                    var edgeChanged = itineroPoint.EdgeId != existingElement.EdgeId;
-                    var typeChanged = existingElement.Type != elementType;
+                    var edgeChanged = dto.EdgeId != existingElement.EdgeId;
+                    var typeChanged = existingElement.Type != dto.ElementType;
                     if (edgeChanged || typeChanged)
                     {
                         //sfety score in this element has to be re-calculated
@@ -110,20 +179,20 @@ namespace SafePath.Services
                     }
 
                     //updates the data (type is updated later)
-                    existingElement.Lat = lat;
-                    existingElement.Lng = lng;
-                    existingElement.EdgeId = itineroPoint.EdgeId;
-                    existingElement.VertexId = itineroPoint.VertexId;
+                    existingElement.Lat = dto.Lat;
+                    existingElement.Lng = dto.Lng;
+                    existingElement.EdgeId = dto.EdgeId;
+                    existingElement.VertexId = dto.VertexId;
 
                     mustRecalculate = edgeChanged || typeChanged;
                     mustAdd = edgeChanged;
                 }
                 else
                 {
-                    if (existingElement.Type == elementType)
+                    if (existingElement.Type == dto.ElementType)
                     {
                         //nothing changed.
-                        return false;
+                        return UpdateResult(MapElementUpdateResult.ResultValues.NoChanges);
                     }
 
                     //if reaches here, the type changed, so it has to 
@@ -131,36 +200,41 @@ namespace SafePath.Services
                     mustRecalculate = true;
                 }
 
-                existingElement.Type = elementType;
+                existingElement.Type = dto.ElementType;
                 mapElementRepository.Update(existingElement);
             }
             else
             {
                 //TODO: prior asking to itinero for the coordinate info, check if it is
                 //not already resolved and stored in the Sqlite db
-                //TODO: add error handling
-                var itineroPoint = itineroProxy.GetItineroEdgeIds((float)lat, (float)lng);
-                if (itineroPoint.Error) return false;
+                if (dto.EdgeId == null)
+                {
+                    var itineroPoint = itineroProxy.GetItineroEdgeIds((float)dto.Lat, (float)dto.Lng);
+                    //TODO: add error handling
+                    if (itineroPoint.Error) return UpdateResult(MapElementUpdateResult.ResultValues.PointNotInMap);
+
+                    dto.EdgeId = itineroPoint.EdgeId;
+                    dto.VertexId = itineroPoint.VertexId;
+                }
 
                 //if there wasn't an element Id, we still need to
                 //check by coordinates if there is already an element in the DB. thus,
                 //we list them alls and look for one with the same type.
-                var elementsOnEdge = mapElementRepository.GetByEdgeId(itineroPoint.EdgeId!.Value);
-
-                if (elementsOnEdge?.Any(e => e.Type == elementType) == true)
-                    return false; //element already exists
+                var elementsOnEdge = mapElementRepository.GetByEdgeId(dto.EdgeId!.Value);
+                if (elementsOnEdge?.Any(e => e.Type == dto.ElementType) == true)
+                    return UpdateResult(MapElementUpdateResult.ResultValues.DuplicatesElement); //element already exists
 
                 //user is adding an element
                 existingElement = new MapElement
                 {
-                    Lat = lat,
-                    Lng = lng,
-                    EdgeId = itineroPoint!.EdgeId,
-                    VertexId = itineroPoint.VertexId,
-                    Type = elementType
+                    Lat = dto.Lat,
+                    Lng = dto.Lng,
+                    EdgeId = dto.EdgeId,
+                    VertexId = dto.VertexId,
+                    Type = dto.ElementType
                 };
                 mapElementRepository.Insert(existingElement);
-                mustAdd = mustRecalculate = true;
+                mustAdd = mustRecalculate = elementCreated = true;
             }
 
             //safety info
@@ -196,7 +270,11 @@ namespace SafePath.Services
             if (mustRecalculate)
                 tracker.Track(safetyInfo);
 
-            return true;
+            return new MapElementUpdateResult
+            {
+                MapElementId = (elementCreated ? existingElement.Id : null),
+                Result = MapElementUpdateResult.ResultValues.Success
+            };
         }
 
         public async Task UploadBulkDataCSV(Guid areaId, string fileContent)
@@ -212,18 +290,50 @@ namespace SafePath.Services
         {
             await dataValidator.ValidateCrimeReportCSVFile(fileContent, out IList<CrimeEntry> entries);
 
-            var tracker = safetyScoreChangeTrackerFactory.Create();
-
             //data is valid, let's save it in the DB.
             var uploadingEntity = new CrimeDataUploading { RawData = fileContent, TenantId = CurrentTenant!.Id };
             uploadingEntity = await crimeDataUploadingRepository.InsertAsync(uploadingEntity);
 
-            //deletes reports with Severity = 0
-            var entriesToDelete = entries
-                .Where(e => e.Severity == 0)
-                .Select(e => new CoordinatesDto { Lat = e.Latitude, Lng = e.Longitude })
+            var entriesWithEdges = entries
+                .Select(e => new { Entry = e, ItineroEdgeInfo = itineroProxy.GetItineroEdgeIds(e.Latitude, e.Longitude) })
                 .ToList();
 
+            var failedToResolve = entriesWithEdges.Where(e => e.ItineroEdgeInfo.Error).ToList();
+            var entriesResolved = entriesWithEdges.Where(e => !e.ItineroEdgeInfo.Error).ToList();
+
+            var dbEntries = mapElementRepository.FindCrimeDataByEdgeIds(entriesResolved.Select(e => e.ItineroEdgeInfo.EdgeId!.Value).ToList());
+
+            //we have now three lists: those that failed to resolve, those that were resolved and
+            //the list of entities in the DB. We have to concilated these last two, looking for changes
+            //to apply to the crime reports, or delete them. For those entries not found in the DB list
+            //we have to create them.
+
+            MapElementUpdateDto toUpdateDto(CrimeEntry entry, PointSearchDto edgeInfo) =>
+                new MapElementUpdateDto
+                {
+                    AreaId = areaId,
+                    Lat = entry.Latitude,
+                    Lng = entry.Longitude,
+                    EdgeId = edgeInfo.EdgeId,
+                    VertexId = edgeInfo.VertexId,
+                    ElementType = GetCrimeReportElementType(entry.Severity),
+                    ElementId = dbEntries.FirstOrDefault(d => d.EdgeId == edgeInfo.EdgeId!.Value)?.Id
+                };
+
+            var updateDtos = entriesResolved
+                .Where(e => e.Entry.Severity != 0)
+                .Select(entry => toUpdateDto(entry.Entry, entry.ItineroEdgeInfo))
+                .ToList();
+
+
+            var deleteDtos = entriesResolved
+                .Where(e => e.Entry.Severity == 0)
+                .Select(entry => toUpdateDto(entry.Entry, entry.ItineroEdgeInfo))
+                .ToList();
+
+            await UpdatePointsInternal(updateDtos, deleteDtos);
+
+            /*
             if (entriesToDelete.Count > 0)
             {
                 //delete is made in two steps. First we get the entities to delete,
@@ -246,7 +356,7 @@ namespace SafePath.Services
                     areaService.ClearSecurityInfoCache(areaId)
                 ]);
             }
-
+            */
             /*
             var dbEntries = entries.Where(e => e.Severity > 0).Select(e => new CrimeDataUploadingEntry
             {
@@ -263,6 +373,50 @@ namespace SafePath.Services
 
             //await UpdateSafetyDB(areaId, dbEntries);
             //await areaService.ClearSecurityInfoCache(areaId);
+        }
+
+        private MapElementUpdateResult DeleteMapElements(MapElementUpdateDto element, ISafetyScoreChangeTracker tracker)
+        {
+            MapElement? dbElement = null;
+
+            if (element.ElementId != null)
+            {
+                dbElement = mapElementRepository.GetById(element.ElementId.Value, true);
+            }
+            else
+            {
+                if (element.EdgeId == null)
+                {
+                    var itineroPoint = itineroProxy.GetItineroEdgeIds((float)element.Lat, (float)element.Lng);
+                    if (itineroPoint.Error)
+                        return UpdateResult(MapElementUpdateResult.ResultValues.PointNotInMap);
+
+                    element.EdgeId = itineroPoint.EdgeId;
+                    element.VertexId = itineroPoint.VertexId;
+                }
+
+                var dbElements = mapElementRepository.GetByEdgeId(element.EdgeId!.Value, false);
+                var isCrimeReport = element.ElementType >= SecurityElementTypes.CrimeReport_Severity_1 && element.ElementType <= SecurityElementTypes.CrimeReport_Severity_5;
+
+                if (isCrimeReport)
+                {
+
+                }
+                else
+                {
+                    dbElement = dbElements.FirstOrDefault(e => e.Type == element.ElementType);
+                }
+            }
+
+            //checks if element was found in the DB
+            if (dbElement == null)
+                return UpdateResult(MapElementUpdateResult.ResultValues.NotFound);
+
+            //element found. we track its safety score to ensure it is
+            //recalculated and then proceed to delete it.
+            tracker.Track(dbElement);
+            mapElementRepository.Delete(dbElement);
+            return UpdateResult(MapElementUpdateResult.ResultValues.Success);
         }
 
         private bool UpdateCrimeEntry(CrimeEntry entry, ISafetyScoreChangeTracker tracker)
@@ -345,7 +499,7 @@ namespace SafePath.Services
 
             foreach (var p in pointsToSave)
             {
-                UpdatePointInternal(areaId, null, p.Latitude, p.Longitude, GetCrimeReportElementType(p.Severity), tracker);
+                // UpdatePointInternal(areaId, null, p.Latitude, p.Longitude, GetCrimeReportElementType(p.Severity), tracker);
             }
 
             //TODO: complete
@@ -414,5 +568,8 @@ namespace SafePath.Services
                 _ => SecurityElementTypes.CrimeReport_Severity_1,
             };
         }
+
+        private static MapElementUpdateResult UpdateResult(MapElementUpdateResult.ResultValues result, int? mapElementId = null)
+                => new() { Result = result, MapElementId = mapElementId };
     }
 }

@@ -1,16 +1,26 @@
 ﻿using SafePath.Entities.FastStorage;
 using SafePath.Repositories.FastStorage;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace SafePath.Services
 {
+    /// <summary>
+    /// Represents an object able to create
+    /// <see cref="ISafetyScoreChangeTracker"/> entities.
+    /// </summary>
     public interface ISafetyScoreChangeTrackerFactory
     {
+        /// <summary>
+        /// Creates a new <see cref="ISafetyScoreChangeTracker"/> entity.
+        /// </summary>
+        /// <returns></returns>
         ISafetyScoreChangeTracker Create();
     }
 
+    /// <summary>
+    /// <inheritdoc />
+    /// </summary>
     public class SafetyScoreChangeTrackerFactory : ISafetyScoreChangeTrackerFactory
     {
         private readonly ISafetyScoreCalculator safetyScoreCalculator;
@@ -22,8 +32,16 @@ namespace SafePath.Services
             this.safetyScoreElementRepository = safetyScoreElementRepository;
         }
 
+
+        /// <summary>
+        /// <inheritdoc />
+        /// </summary>
         public ISafetyScoreChangeTracker Create() => new SafetyScoreChangeTracker(safetyScoreCalculator, safetyScoreElementRepository);
 
+
+        /// <summary>
+        /// <inheritdoc />
+        /// </summary>
         private class SafetyScoreChangeTracker : ISafetyScoreChangeTracker
         {
             private readonly BlockingCollection<int> elementsToTrack = [];
@@ -37,19 +55,28 @@ namespace SafePath.Services
             }
 
 
+            /// <summary>
+            /// <inheritdoc />
+            /// </summary>
             public void Track(params SafetyScoreElement?[] elements) =>
                 elements?.Where(e => e != null).ToList().ForEach(e => elementsToTrack.Add(e!.Id));
 
+            /// <summary>
+            /// <inheritdoc />
+            /// </summary>
             public void Track(params MapElement?[] elements) => elements?.ToList().ForEach(Track);
 
 
-            public void Track(MapElement? element)
+            private void Track(MapElement? element)
             {
                 if (element?.SafetyScoreElements?.Any() != true) return;
                 foreach (var score in element.SafetyScoreElements)
                     elementsToTrack.Add(score.Id);
             }
 
+            /// <summary>
+            /// <inheritdoc />
+            /// </summary>
             public int UpdateScores()
             {
                 if (elementsToTrack.Count == 0) return 0;
